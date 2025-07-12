@@ -30,7 +30,7 @@ The **StarkInsure On-Chain** repository contains the core smart contracts poweri
 ## 🛠️ Tech Stack  
 | Component           | Technology                                                                 |
 |---------------------|---------------------------------------------------------------------------|
-| Language           | [Cairo 2.3.0](https://www.cairo-lang.org/)                              |
+| Language           | [Cairo 2.9.2](https://www.cairo-lang.org/)                              |
 | Development Kit    | [Starknet Foundry](https://foundry-rs.github.io/starknet-foundry/)       |
 | Testing            | [Starknet.js](https://www.starknetjs.com/) + [Snforge](https://github.com/foundry-rs/starknet-foundry) |
 | Deployment         | [Starkli](https://github.com/xJonathanLEI/starkli)                       |
