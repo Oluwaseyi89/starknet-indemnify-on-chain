@@ -1,0 +1,35 @@
+# Cairo build artifacts
+/target/
+*.sierra
+*.casm
+*.json
+
+# IDE specific
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.local
+
+# StarkNet specific
+*.account
+*.keystore
+*.keystore.json
+
+# Scarb cache
+.scarb/
+
+# Test artifacts
+/test-results/
+/coverage/
+
+# Documentation
+/docs/_build/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Local development
+/local_devnet/
