@@ -1,6 +1,6 @@
-# StarkInsure On-Chain
+# Starknet-Indemnify On-Chain
 
-The **StarkInsure On-Chain** repository contains the core smart contracts powering StarkInsure's DeFi insurance platform, written in **Cairo 2.9.2** for StarkNet. This implements the blockchain logic for policy underwriting, claims processing, and risk pool management.
+The **Starknet-Indemnify On-Chain** repository contains the core smart contracts powering Starknet-Indemnify's DeFi insurance platform, written in **Cairo 2.12.0** for Starknet. This implements the blockchain logic for policy underwriting, claims processing, and risk pool management.
 
 ---
 
@@ -30,7 +30,7 @@ The **StarkInsure On-Chain** repository contains the core smart contracts poweri
 ## 🛠️ Tech Stack  
 | Component           | Technology                                                                 |
 |---------------------|---------------------------------------------------------------------------|
-| Language           | [Cairo 2.9.2](https://www.cairo-lang.org/)                              |
+| Language           | [Cairo 2.12.0](https://www.cairo-lang.org/)                              |
 | Development Kit    | [Starknet Foundry](https://foundry-rs.github.io/starknet-foundry/)       |
 | Testing            | [Starknet.js](https://www.starknetjs.com/) + [Snforge](https://github.com/foundry-rs/starknet-foundry) |
 | Deployment         | [Starkli](https://github.com/xJonathanLEI/starkli)                       |
@@ -48,8 +48,8 @@ The **StarkInsure On-Chain** repository contains the core smart contracts poweri
 ### Installation  
 1. **Clone the repo**:  
    ```bash
-   git clone https://github.com/CRYPTOInsured-Foundation/starkinsure-on-chain.git
-   cd starkinsure-on-chain
+   git clone https://github.com/CRYPTOInsured-Foundation/starknet-indemnify-on-chain.git
+   cd starknet-indemnify-on-chain
    ```
 2. Setup environment:
    ```bash
