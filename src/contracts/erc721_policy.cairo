@@ -148,7 +148,7 @@ pub struct PolicyDataResponse {
 #[starknet::contract]
 pub mod PolicyNFT {
     use starknet::get_block_timestamp;
-use openzeppelin_access::accesscontrol::AccessControlComponent;
+    use openzeppelin_access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin_token::erc721::{ERC721Component, ERC721HooksEmptyImpl};
     use openzeppelin::upgrades::UpgradeableComponent;
