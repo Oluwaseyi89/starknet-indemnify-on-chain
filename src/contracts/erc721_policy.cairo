@@ -1,154 +1,7 @@
-use starknet::{
-    ContractAddress,
-};
-
-use core::array::Array;
-#[starknet::interface]
-pub trait IPolicyNFT<TContractState> {
-    fn mint_policy(
-        ref self: TContractState,
-        policyholder: ContractAddress,
-        policy_class_code: u8,
-        subject_matter: ByteArray,
-        sum_insured: u256,
-        premium: u256,
-        premium_frequency_code: u8,
-        frequency_factor: u8,
-    );
-    fn burn_policy(ref self: TContractState, token_id: u256, reason_index: u8);
-    fn get_policy_data(self: @TContractState, token_id: u256) -> PolicyDataResponse;
-    fn set_base_uri(ref self: TContractState, new_base_uri: ByteArray);
-    fn update_policy_data(
-        ref self: TContractState,
-        token_id: u256, 
-        subject_matter: ByteArray,
-        sum_insured: u256,
-        premium: u256,
-        premium_frequency_code: u8,
-        frequency_factor: u8,
-        update_type_code: u8,
-        endorsement_amount: u256
-    );
-}
-
-
-
-#[derive(Drop, starknet::Store, Serde, Clone)]
-pub struct PolicyData {
-    pub policy_id: u256,
-    pub policyholder: ContractAddress,
-    pub policy_class_code: u8,
-    pub subject_matter: ByteArray,
-    pub sum_insured: u256,
-    pub premium: u256,
-    pub premium_frequency_code: u8,
-    pub frequency_factor: u8,
-    pub start_date: u64,
-    pub expiration_date: u64,
-    pub is_active: bool,
-    pub is_expired: bool,
-    pub claims_count: u256,
-    pub has_claimed: bool,
-    pub aggregate_claim_amount: u256
-}
-
-
-#[derive(Drop, Serde, Clone)]
-pub struct PolicyDataResponse {
-    pub policy_id: u256,
-    pub policyholder: ContractAddress,
-    pub policy_class: PolicyClass,
-    pub subject_matter: ByteArray,
-    pub sum_insured: u256,
-    pub premium: u256,
-    pub premium_frequency: PremiumFrequency,
-    pub frequency_factor: u8,
-    pub start_date: u64,
-    pub expiration_date: u64,
-    pub is_active: bool,
-    pub is_expired: bool,
-    pub claims_count: u256,
-    pub has_claimed: bool,
-    pub claim_ids: Array<u256>,
-    pub aggregate_claim_amount: u256
-}
-
-#[derive(Drop, starknet::Event)]
-    pub struct PolicyUpdated {
-        #[key]
-        token_id: u256,
-        sum_insured: u256,
-        premium: u256,
-        endorsement_amount: u256,
-        expiration_date: u64,
-        subject_matter: ByteArray,
-        update_type: UpdateType
-    }
-
-
-    #[derive(Drop, starknet::Event)]
-    pub struct PolicyMinted {
-        #[key]
-        token_id: u256,
-        policyholder: ContractAddress,
-        policy_class: PolicyClass,
-        subject_matter: ByteArray,
-        sum_insured: u256,
-        premium: u256,
-        premium_frequency: PremiumFrequency,
-        frequency_factor: u8,
-        minter: ContractAddress,
-    }
-
-    #[derive(Drop, starknet::Event)]
-    pub struct PolicyBurned {
-        burner: ContractAddress,
-        token_id: u256,
-        reason: BurnReason
-    }
-
-    #[derive(Drop, Copy, Serde)]
-    pub enum BurnReason {
-        PolicyExpired,
-        PolicyCancelled,
-        FraudulentClaim,
-        RecklessRepresentation,
-        InvalidReason
-    }
-
-    #[derive(Drop, Copy, Serde)]
-    pub enum PremiumFrequency {
-        Monthly,
-        Quarterly,
-        HalfYearly,
-        Annually,
-        InvalidFrequency
-    }
-
-    #[derive(Drop, Copy, Serde)]
-    pub enum PolicyClass {
-        TravelInsurance,
-        BlockchainExploitInsurance,
-        FireInsurance,
-        MotorInsurance,
-        PersonalAccidentInsurance,
-        HealthInsurance,
-        InvalidClassOfInsurance
-    }
-
-    #[derive(Drop, Copy, Serde)]
-    pub enum UpdateType {
-        Endorsement,
-        Renewal,       
-        InvalidUpdateType
-    }
- 
-
-
 #[starknet::contract]
 pub mod PolicyNFT {
     use starknet::get_block_timestamp;
-use openzeppelin_access::accesscontrol::AccessControlComponent;
+    use openzeppelin_access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin_token::erc721::{ERC721Component, ERC721HooksEmptyImpl};
     use openzeppelin::upgrades::UpgradeableComponent;
@@ -166,19 +19,11 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
     };
     use core::traits::Into;
 
-    use super::{
-        PolicyData,
-        IPolicyNFT,
-        BurnReason,
-        PolicyMinted,
-        PolicyUpdated,
-        PolicyBurned,
-        PolicyClass,
-        PremiumFrequency,
-        PolicyDataResponse,
-        UpdateType
-    };
-  
+    use crate::structs::structs::*;
+    use crate::enums::enums::*;
+    use crate::utils::utils::*;
+    use crate::event_structs::event_structs::*;
+    use crate::interfaces::interfaces::*;
 
     component!(path: ERC721Component, storage: erc721, event: ERC721Event);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
@@ -192,7 +37,7 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
     const ONE_MONTH: u64 = 3600 * 24 * 30;
     const ONE_QUARTER: u64 = ONE_MONTH * 3;
     const HALF_YEAR: u64 = ONE_MONTH * 6;
-    const ONE_YEAR: u64 = ONE_MONTH * 12;
+    const ONE_YEAR: u64 = 3600 * 24 * 365;
 
 
     #[abi(embed_v0)]
@@ -221,7 +66,10 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
         general_claim_ids: Map<u256, Vec<u128>>,
         next_policy_id: u256,
         next_token_id: u256,
-        base_uri: ByteArray
+        base_uri: ByteArray,
+        proposal_form_address: ContractAddress,
+        treasury_address: ContractAddress,
+        claims_contract_address: ContractAddress
     }
 
     #[event]
@@ -267,14 +115,8 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
 
         fn mint_policy(
             ref self: ContractState,
-            policyholder: ContractAddress,
-            policy_class_code: u8,
-            subject_matter: ByteArray,
-            sum_insured: u256,
-            premium: u256,
-            premium_frequency_code: u8,
-            frequency_factor: u8,
-        ) {
+            proposal_id: u256
+        ) -> u256 {
 
             let minter: ContractAddress = get_caller_address();
 
@@ -284,16 +126,15 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
             let current_token_id: u256 = self.next_token_id.read();
             let current_policy_id: u256 = self.next_policy_id.read();
 
+            let proposal_form_address: ContractAddress = self.proposal_form_address.read();
 
-            let mut premium_frequency_choice: PremiumFrequency = match premium_frequency_code {
-                0 => PremiumFrequency::Monthly,
-                1 => PremiumFrequency::Quarterly,
-                2 => PremiumFrequency::HalfYearly,
-                3 => PremiumFrequency::Annually,             
-                _ => PremiumFrequency::InvalidFrequency
-            };
+            let proposal_form_dispatcher: IProposalFormDispatcher = IProposalFormDispatcher { contract_address: proposal_form_address };
 
-            let mut term_length_factor: u64 = match premium_frequency_code {
+            let paid_proposal: ProposalFormResponse = proposal_form_dispatcher.get_proposal_by_id(proposal_id);
+
+
+
+            let mut term_length_factor: u64 = match convert_premium_frequency_to_code(paid_proposal.premium_frequency) {
                 0 => ONE_MONTH,
                 1 => ONE_QUARTER,
                 2 => HALF_YEAR,
@@ -305,36 +146,22 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
 
             let start_date_time: u64 = get_block_timestamp();
 
-            let term_length: u64 = term_length_factor * frequency_factor.into();
+            let term_length: u64 = term_length_factor * paid_proposal.frequency_factor.into();
 
             let expiry_time: u64 = start_date_time + term_length;
 
             assert!(term_length <= ONE_YEAR, "PolicyMintDenied: Insurance term cannot be more than One Year");
 
- 
-
-            let mut policy_class_choice: PolicyClass = match policy_class_code {
-                0 => PolicyClass::TravelInsurance,
-                1 => PolicyClass::BlockchainExploitInsurance,
-                2 => PolicyClass::FireInsurance,
-                3 => PolicyClass::MotorInsurance,
-                4 => PolicyClass::PersonalAccidentInsurance,
-                5 => PolicyClass::HealthInsurance,
-                _ => PolicyClass::InvalidClassOfInsurance
-            };
-
-
-
 
             let policy_data: PolicyData = PolicyData {
                 policy_id: current_policy_id,
-                policyholder: policyholder,
-                policy_class_code: policy_class_code,
-                subject_matter: subject_matter.clone(),
-                sum_insured: sum_insured,
-                premium: premium,
-                premium_frequency_code: premium_frequency_code,
-                frequency_factor: frequency_factor,
+                policyholder: paid_proposal.proposer,
+                policy_class_code: convert_policy_class_to_code(paid_proposal.policy_class),
+                subject_matter: paid_proposal.subject_matter.clone(),
+                sum_insured: paid_proposal.sum_insured,
+                premium: paid_proposal.premium_payable,
+                premium_frequency_code: convert_premium_frequency_to_code(paid_proposal.premium_frequency),
+                frequency_factor: paid_proposal.frequency_factor,
                 start_date: start_date_time,
                 expiration_date: expiry_time,
                 is_active: true,
@@ -346,13 +173,13 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
 
             let policy_data_response: PolicyDataResponse = PolicyDataResponse {
                 policy_id: current_policy_id,
-                policyholder: policyholder,
-                policy_class: policy_class_choice,
-                subject_matter: subject_matter.clone(),
-                sum_insured: sum_insured,
-                premium: premium,
-                premium_frequency: premium_frequency_choice,
-                frequency_factor: frequency_factor,
+                policyholder: paid_proposal.proposer,
+                policy_class: paid_proposal.policy_class,
+                subject_matter: paid_proposal.subject_matter.clone(),
+                sum_insured: paid_proposal.sum_insured,
+                premium: paid_proposal.premium_payable,
+                premium_frequency: paid_proposal.premium_frequency,
+                frequency_factor: paid_proposal.frequency_factor,
                 start_date: start_date_time,
                 expiration_date: expiry_time,
                 is_active: true,
@@ -367,20 +194,20 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
             policy_data_response.serialize(ref mint_call_data);
 
            
-            self.erc721.safe_mint(policyholder, current_token_id, mint_call_data.span());
+            self.erc721.safe_mint(paid_proposal.proposer, current_token_id, mint_call_data.span());
 
             self.policy_details.write(current_token_id, policy_data);
 
 
             let policy_minted_event: PolicyMinted = PolicyMinted {
                 token_id: current_token_id,
-                policyholder: policyholder,
-                policy_class: policy_class_choice,
-                subject_matter: subject_matter,
-                sum_insured: sum_insured,
-                premium: premium,
-                premium_frequency: premium_frequency_choice,
-                frequency_factor: frequency_factor,
+                policyholder: paid_proposal.proposer,
+                policy_class: paid_proposal.policy_class,
+                subject_matter: paid_proposal.subject_matter,
+                sum_insured: paid_proposal.sum_insured,
+                premium: paid_proposal.premium_payable,
+                premium_frequency: paid_proposal.premium_frequency,
+                frequency_factor: paid_proposal.frequency_factor,
                 minter: minter,
             };
 
@@ -388,6 +215,8 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
             self.next_token_id.write(current_token_id + 1);
 
             self.emit(policy_minted_event);
+
+            current_token_id
         }
 
         fn burn_policy(ref self: ContractState, token_id: u256, reason_index: u8) {
@@ -398,19 +227,12 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
               
               self.erc721.burn(token_id); 
 
-            let set_reason: BurnReason = match reason_index {
-                0 => BurnReason::PolicyExpired,
-                1 => BurnReason::PolicyCancelled,
-                2 => BurnReason::FraudulentClaim,
-                3 => BurnReason::RecklessRepresentation,
-                _ => BurnReason::InvalidReason
-
-            };
+       
 
             let policy_burn_event: PolicyBurned = PolicyBurned {
                 burner: caller_address,
                 token_id: token_id,
-                reason: set_reason
+                reason: convert_code_to_burn_reason(reason_index)
             };
 
             self.emit(policy_burn_event);
@@ -419,24 +241,6 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
         fn get_policy_data(self: @ContractState, token_id: u256) -> PolicyDataResponse {
 
             let policy_data: PolicyData = self.policy_details.read(token_id);
-
-            let mut policy_class_choice: PolicyClass = match policy_data.policy_class_code {
-                0 => PolicyClass::TravelInsurance,
-                1 => PolicyClass::BlockchainExploitInsurance,
-                2 => PolicyClass::FireInsurance,
-                3 => PolicyClass::MotorInsurance,
-                4 => PolicyClass::PersonalAccidentInsurance,
-                5 => PolicyClass::HealthInsurance,
-                _ => PolicyClass::InvalidClassOfInsurance
-            };
-
-            let mut premium_frequency_choice: PremiumFrequency = match policy_data.premium_frequency_code {
-                0 => PremiumFrequency::Monthly,
-                1 => PremiumFrequency::Quarterly,
-                2 => PremiumFrequency::HalfYearly,
-                3 => PremiumFrequency::Annually,             
-                _ => PremiumFrequency::InvalidFrequency
-            };
 
             let mut claim_array: Array<u256> = array![]; 
 
@@ -449,11 +253,11 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
             let policy_data_response: PolicyDataResponse = PolicyDataResponse {
                 policy_id: policy_data.policy_id,
                 policyholder: policy_data.policyholder,
-                policy_class: policy_class_choice,
+                policy_class: convert_policy_code_to_class(policy_data.policy_class_code),
                 subject_matter: policy_data.subject_matter,
                 sum_insured: policy_data.sum_insured,
                 premium: policy_data.premium,
-                premium_frequency: premium_frequency_choice,
+                premium_frequency: convert_premium_code_to_frequency(policy_data.premium_frequency_code),
                 frequency_factor: policy_data.frequency_factor,
                 start_date: policy_data.start_date,
                 expiration_date: policy_data.expiration_date,
@@ -537,12 +341,6 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
 
             self.policy_details.write(token_id, new_policy_data.clone());
 
-            let mut update_type_var: UpdateType = match update_type_code {
-                0 => UpdateType::Endorsement,
-                1 => UpdateType::Renewal,
-                _ => UpdateType::InvalidUpdateType
-            };
-
             let policy_update_event: PolicyUpdated = PolicyUpdated {
                 token_id: token_id,
                 sum_insured: sum_insured,
@@ -550,10 +348,40 @@ use openzeppelin_access::accesscontrol::AccessControlComponent;
                 endorsement_amount: endorsement_amount,
                 expiration_date: new_policy_data.expiration_date,
                 subject_matter: subject_matter,
-                update_type: update_type_var
+                update_type: convert_code_to_policy_update_type(update_type_code)
             };
 
             self.emit(policy_update_event);
+        }
+
+        fn set_treasury_address(
+            ref self: ContractState,
+            treasury_address: ContractAddress
+        ){
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+            self.treasury_address.write(treasury_address);
+        }
+    
+        fn set_proposal_form_address(
+            ref self: ContractState,
+            proposal_form_address: ContractAddress
+        ) {
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+            self.proposal_form_address.write(proposal_form_address);
+        }
+    
+        fn set_claims_contract_address(
+            ref self: ContractState,
+            claims_contract_address: ContractAddress
+        ) {
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+            self.claims_contract_address.write(claims_contract_address);
         }
     }
 
