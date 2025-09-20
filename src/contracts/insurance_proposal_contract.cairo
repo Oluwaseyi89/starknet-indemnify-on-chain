@@ -369,7 +369,6 @@ use starknet::{ ContractAddress, ClassHash };
 
             let updateable_proposal: ProposalForm = self.proposals.read(proposal_id);
 
-            let current_time: u64 = get_block_timestamp();
 
             let updated_proposal: ProposalForm = ProposalForm {
                 
@@ -383,7 +382,7 @@ use starknet::{ ContractAddress, ClassHash };
                 frequency_factor: updateable_proposal.frequency_factor,
                 has_kyc: has_kyc,
                 submission_date: updateable_proposal.submission_date,
-                last_updated: current_time,
+                last_updated: updateable_proposal.last_updated,
                 expiration_date: updateable_proposal.expiration_date,
                 is_active: updateable_proposal.is_active,
                 is_expired: updateable_proposal.is_expired,
@@ -445,8 +444,6 @@ use starknet::{ ContractAddress, ClassHash };
 
             let updateable_proposal: ProposalForm = self.proposals.read(proposal_id);
 
-            let current_time: u64 = get_block_timestamp();
-
             let updated_proposal: ProposalForm = ProposalForm {
                 
                 proposal_id: updateable_proposal.proposal_id,
@@ -459,7 +456,7 @@ use starknet::{ ContractAddress, ClassHash };
                 frequency_factor: updateable_proposal.frequency_factor,
                 has_kyc: has_kyc,
                 submission_date: updateable_proposal.submission_date,
-                last_updated: current_time,
+                last_updated: updateable_proposal.last_updated,
                 expiration_date: updateable_proposal.expiration_date,
                 is_active: updateable_proposal.is_active,
                 is_expired: updateable_proposal.is_expired,
@@ -507,7 +504,6 @@ use starknet::{ ContractAddress, ClassHash };
             proposal_id: u256,
         ) -> bool {
 
-            self.reentrancyguard.start();
 
             let paying_proposal: ProposalForm = self.proposals.read(proposal_id);
 
@@ -540,10 +536,8 @@ use starknet::{ ContractAddress, ClassHash };
                 };
 
                 self.emit(mint_event);
-                self.reentrancyguard.end();
                 return true;
             } else {
-                self.reentrancyguard.end();
                 return false;
             }
 
