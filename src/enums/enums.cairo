@@ -87,6 +87,7 @@ pub enum ClaimStatus {
     UnderReview,
     Approved,
     Repudiated,
+    Settled,
     InvalidStatus
 }
 
@@ -97,6 +98,7 @@ pub enum ClaimType {
     Medium,
     Large,
     Catastrophic,
+    Undetermined,
     InvalidClaimType
 }
 

@@ -1,8 +1,6 @@
 #[starknet::contract]
 mod InsuranceClaims {
 
-use crate::enums::enums::ClaimStatus;
-use crate::structs::structs::InsuranceClaim;
 use starknet::{
         ContractAddress,
         ClassHash,
