@@ -1,5 +1,6 @@
 use starknet::ContractAddress;
 use crate::structs::structs::*;
+use crate::enums::enums::*;
 
 
 #[starknet::interface]

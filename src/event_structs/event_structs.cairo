@@ -1,5 +1,3 @@
-use crate::enums::enums::ClaimType;
-use crate::enums::enums::ClaimRepudiationReason;
 use starknet::ContractAddress;
 use crate::enums::enums::*;
 

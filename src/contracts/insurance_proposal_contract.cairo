@@ -1,6 +1,5 @@
 #[starknet::contract]
 pub mod ProposalFormContract {
-    use crate::structs::structs::ProposalForm;
 use starknet::{ ContractAddress, ClassHash };
     use starknet::{ get_caller_address, get_block_timestamp };
 //     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
