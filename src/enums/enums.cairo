@@ -64,3 +64,39 @@ pub enum UpdateType {
     Renewal,       
     InvalidUpdateType
 }
+
+
+#[derive(Drop, Copy, Serde)]
+pub enum ClaimRepudiationReason {
+    NonDisclosure,
+    Misrepresentation,
+    PolicyExclusion,
+    FraudulentClaim,
+    LapsedPolicy,
+    PolicyTermsAndConditionsBreach,
+    InsufficientDocumentation,
+    IllegalClaim,
+    LackOfInsurableInterest,
+    NotRepudiated,
+    InvalidRepudiationReason  
+}
+
+#[derive(Drop, Copy, Serde)]
+pub enum ClaimStatus {
+    Submitted,
+    UnderReview,
+    Approved,
+    Repudiated,
+    InvalidStatus
+}
+
+
+#[derive(Drop, Copy, Serde)]
+pub enum ClaimType {
+    Small,
+    Medium,
+    Large,
+    Catastrophic,
+    InvalidClaimType
+}
+

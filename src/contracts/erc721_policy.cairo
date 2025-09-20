@@ -11,6 +11,7 @@ pub mod PolicyNFT {
         Map,
         Vec,
         VecTrait,
+        MutableVecTrait,
         StorageMapReadAccess,
         StorageMapWriteAccess,
         StoragePointerReadAccess,
@@ -63,7 +64,10 @@ pub mod PolicyNFT {
         #[substorage(v0)]
         upgradeable: UpgradeableComponent::Storage,
         policy_details: Map<u256, PolicyData>,
-        general_claim_ids: Map<u256, Vec<u128>>,
+        ///Claim_IDs per policy
+        general_claim_ids: Map<u256, Vec<u256>>,
+        ///Aggregate claim amount per policy
+        aggregate_claim_amounts: Map<u256, u256>,
         next_policy_id: u256,
         next_token_id: u256,
         base_uri: ByteArray,
@@ -155,6 +159,7 @@ pub mod PolicyNFT {
 
             let policy_data: PolicyData = PolicyData {
                 policy_id: current_policy_id,
+                proposal_id: proposal_id,
                 policyholder: paid_proposal.proposer,
                 policy_class_code: convert_policy_class_to_code(paid_proposal.policy_class),
                 subject_matter: paid_proposal.subject_matter.clone(),
@@ -173,6 +178,7 @@ pub mod PolicyNFT {
 
             let policy_data_response: PolicyDataResponse = PolicyDataResponse {
                 policy_id: current_policy_id,
+                proposal_id: proposal_id,
                 policyholder: paid_proposal.proposer,
                 policy_class: paid_proposal.policy_class,
                 subject_matter: paid_proposal.subject_matter.clone(),
@@ -242,9 +248,13 @@ pub mod PolicyNFT {
 
             let policy_data: PolicyData = self.policy_details.read(token_id);
 
+            let policy_aggregate_claim_amount: u256 = self.aggregate_claim_amounts.entry(token_id).read();
+
             let mut claim_array: Array<u256> = array![]; 
 
             let len: u64 = self.general_claim_ids.entry(token_id).len();
+
+            let has_claimed: bool = policy_has_claimed(len);
 
             for i in 0..len {
                 claim_array.append(self.general_claim_ids.entry(token_id).at(i).read().into());
@@ -252,6 +262,7 @@ pub mod PolicyNFT {
 
             let policy_data_response: PolicyDataResponse = PolicyDataResponse {
                 policy_id: policy_data.policy_id,
+                proposal_id: policy_data.proposal_id,
                 policyholder: policy_data.policyholder,
                 policy_class: convert_policy_code_to_class(policy_data.policy_class_code),
                 subject_matter: policy_data.subject_matter,
@@ -263,10 +274,10 @@ pub mod PolicyNFT {
                 expiration_date: policy_data.expiration_date,
                 is_active: policy_data.is_active,
                 is_expired: policy_data.is_expired,
-                claims_count: policy_data.claims_count,
-                has_claimed: policy_data.has_claimed,
+                claims_count: len.into(),
+                has_claimed: has_claimed,
                 claim_ids: claim_array,
-                aggregate_claim_amount: policy_data.aggregate_claim_amount
+                aggregate_claim_amount: policy_aggregate_claim_amount
             };
 
             policy_data_response
@@ -302,6 +313,7 @@ pub mod PolicyNFT {
             let mut new_policy_data: PolicyData =  match update_type_code {
                 0 => PolicyData {
                         policy_id: current_policy_data.policy_id,
+                        proposal_id: current_policy_data.proposal_id,
                         policyholder: current_policy_data.policyholder,
                         policy_class_code: current_policy_data.policy_class_code,
                         subject_matter: subject_matter.clone(),
@@ -319,6 +331,7 @@ pub mod PolicyNFT {
                     },
                 1 => PolicyData {
                         policy_id: current_policy_data.policy_id,
+                        proposal_id: current_policy_data.proposal_id,
                         policyholder: current_policy_data.policyholder,
                         policy_class_code: current_policy_data.policy_class_code,
                         subject_matter: subject_matter.clone(),
@@ -352,6 +365,22 @@ pub mod PolicyNFT {
             };
 
             self.emit(policy_update_event);
+        }
+
+        fn add_claim_to_policy(
+            ref self: ContractState,
+            policy_id: u256,
+            claim_id: u256,
+            claim_amount: u256
+        ) {
+            self.general_claim_ids.entry(policy_id).push(claim_id);
+
+            let current_aggregate_claim: u256 = self.aggregate_claim_amounts.entry(policy_id).read(); 
+
+            let new_aggregate_claim_amount: u256 = current_aggregate_claim + claim_amount;
+
+            self.aggregate_claim_amounts.entry(policy_id).write(new_aggregate_claim_amount);
+            
         }
 
         fn set_treasury_address(
@@ -406,6 +435,14 @@ pub mod PolicyNFT {
 
         delta
     }
+
+    pub fn policy_has_claimed (len: u64) -> bool {
+        if len > 0 {
+            true
+        } else {
+            false
+        }
+    } 
 
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {

@@ -1,520 +1,1095 @@
-// #[starknet::contract]
-// mod InsuranceClaims {
-//     use starknet::ContractAddress;
-//     use starknet::get_caller_address;
+#[starknet::contract]
+mod InsuranceClaims {
+
+use crate::enums::enums::ClaimStatus;
+use crate::structs::structs::InsuranceClaim;
+use starknet::{
+        ContractAddress,
+        ClassHash,
+        get_caller_address,
+        get_block_timestamp
+    };
+
+    use starknet::storage::{
+        Map,
+        Vec,
+        VecTrait,
+        MutableVecTrait,
+        StorageMapReadAccess,
+        StorageMapWriteAccess,
+        StoragePointerReadAccess,
+        StoragePointerWriteAccess,
+        StoragePathEntry
+    };
+
+    use core::traits::{
+        Into,
+    };
+
+    use crate::structs::structs::*;
+    use crate::enums::enums::*;
+    use crate::event_structs::event_structs::*;
+    use crate::utils::utils::*;
+    use crate::interfaces::interfaces::*;
+
+
+
+
 //     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
-//     use openzeppelin::access::accesscontrol::AccessControlComponent;
-//     use openzeppelin::security::pausable::PausableComponent;
-//     use openzeppelin::security::reentrancyguard::ReentrancyGuardComponent;
-//     use openzeppelin::utils::uint::uint256::Uint256;
+    use openzeppelin_access::accesscontrol::AccessControlComponent;
+    use openzeppelin::introspection::src5::SRC5Component;
+    use openzeppelin::upgrades::UpgradeableComponent;
+    use openzeppelin::upgrades::interface::IUpgradeable;
 
-//     component!(path: AccessControlComponent, storage: access, event: AccessControlEvent);
-//     component!(path: PausableComponent, storage: pausable, event: PausableEvent);
-//     component!(path: ReentrancyGuardComponent, storage: reentrancy_guard, event: ReentrancyGuardEvent);
 
-//     // Roles
-//     const CLAIM_ADJUSTER_ROLE: felt252 = 'CLAIM_ADJUSTER';
-//     const CLAIM_APPROVER_ROLE: felt252 = 'CLAIM_APPROVER';
-//     const EMERGENCY_MANAGER_ROLE: felt252 = 'EMERGENCY_MANAGER';
+    component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
-//     // Claim statuses
-//     const STATUS_PENDING: felt252 = 'PENDING';
-//     const STATUS_APPROVED: felt252 = 'APPROVED';
-//     const STATUS_DENIED: felt252 = 'DENIED';
-//     const STATUS_PAID: felt252 = 'PAID';
-//     const STATUS_ESCALATED: felt252 = 'ESCALATED';
-//     const STATUS_UNDER_REVIEW: felt252 = 'UNDER_REVIEW';
 
-//     // Claim types
-//     const TYPE_SMALL: felt252 = 'SMALL_CLAIM';
-//     const TYPE_MEDIUM: felt252 = 'MEDIUM_CLAIM';
-//     const TYPE_LARGE: felt252 = 'LARGE_CLAIM';
-//     const TYPE_CATASTROPHIC: felt252 = 'CATASTROPHIC_CLAIM';
+    #[abi(embed_v0)]
+    impl AccessControlImpl = AccessControlComponent::AccessControlImpl<ContractState>;
+    impl AccessControlInternalImpl = AccessControlComponent::InternalImpl<ContractState>;
 
-//     #[derive(Drop, Serde, Copy)]
-//     struct InsuranceClaim {
-//         policy_id: u256,
-//         claimant: ContractAddress,
-//         amount: Uint256,
-//         currency: ContractAddress, // Token address (0 for ETH/STRK)
-//         status: felt252,
-//         claim_type: felt252,
-//         timestamp: u64,
-//         approved_at: u64,
-//         evidence_hash: felt252, // IPFS hash of evidence
-//         approval_threshold: u8, // Number of approvals needed
-//         current_approvals: u8,
-//         escalation_reason: felt252
-//     }
 
-//     #[derive(Drop, Serde)]
-//     struct ClaimEvidence {
-//         description: felt252,
-//         proof_hash: felt252,
-//         witnesses: Array<ContractAddress>,
-//         external_reports: Array<felt252>
-//     }
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
-//     #[event]
-//     #[derive(Drop, starknet::Event)]
-//     enum Event {
-//         AccessControlEvent: AccessControlComponent::Event,
-//         PausableEvent: PausableComponent::Event,
-//         ReentrancyGuardEvent: ReentrancyGuardComponent::Event,
-//         ClaimSubmitted: ClaimSubmitted,
-//         ClaimApproved: ClaimApproved,
-//         ClaimDenied: ClaimDenied,
-//         ClaimPaid: ClaimPaid,
-//         ClaimEscalated: ClaimEscalated,
-//         EmergencyPayout: EmergencyPayout
-//     }
+    // Roles
+    const CLAIM_ADJUSTER_ROLE: felt252 = selector!("CLAIM_ADJUSTER_ROLE");
+    const CLAIM_APPROVER_ROLE: felt252 = selector!("CLAIM_APPROVER_ROLE");
+    const EMERGENCY_MANAGER_ROLE: felt252 = selector!("EMERGENCY_MANAGER_ROLE");
+    const ADMIN_ROLE: felt252 = selector!("ADMIN_ROLE");
 
-//     #[derive(Drop, starknet::Event)]
-//     struct ClaimSubmitted {
-//         #[key]
-//         claim_id: u256,
-//         policy_id: u256,
-//         claimant: ContractAddress,
-//         amount: Uint256,
-//         claim_type: felt252
-//     }
 
-//     #[derive(Drop, starknet::Event)]
-//     struct ClaimApproved {
-//         #[key]
-//         claim_id: u256,
-//         approver: ContractAddress,
-//         amount: Uint256,
-//         timestamp: u64
-//     }
 
-//     #[derive(Drop, starknet::Event)]
-//     struct ClaimDenied {
-//         #[key]
-//         claim_id: u256,
-//         denier: ContractAddress,
-//         reason: felt252
-//     }
 
-//     #[derive(Drop, starknet::Event)]
-//     struct ClaimPaid {
-//         #[key]
-//         claim_id: u256,
-//         recipient: ContractAddress,
-//         amount: Uint256,
-//         currency: ContractAddress,
-//         tx_hash: felt252
-//     }
-
-//     #[derive(Drop, starknet::Event)]
-//     struct ClaimEscalated {
-//         #[key]
-//         claim_id: u256,
-//         escalator: ContractAddress,
-//         reason: felt252,
-//         new_threshold: u8
-//     }
-
-//     #[derive(Drop, starknet::Event)]
-//     struct EmergencyPayout {
-//         #[key]
-//         claim_id: u256,
-//         executor: ContractAddress,
-//         amount: Uint256,
-//         reason: felt252
-//     }
-
-//     #[storage]
-//     struct Storage {
+           #[storage]
+    struct Storage {
 //         // OpenZeppelin Components
-//         access: AccessControlComponent::Storage,
-//         pausable: PausableComponent::Storage,
-//         reentrancy_guard: ReentrancyGuardComponent::Storage,
+        #[substorage(v0)]
+        accesscontrol: AccessControlComponent::Storage,
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage,
 
-//         // Claims Management Storage
-//         claims: LegacyMap::<u256, InsuranceClaim>,
-//         claim_evidence: LegacyMap::<u256, ClaimEvidence>,
-//         claim_nonce: u256,
-//         treasury_contract: ContractAddress,
-//         governance_contract: ContractAddress,
 
-//         // Claim thresholds and parameters
-//         claim_thresholds: LegacyMap::<felt252, Uint256>,
-//         auto_approval_limit: Uint256,
-//         max_claim_amount: Uint256,
-//         approval_requirements: LegacyMap::<felt252, u8>,
+        // Claims Map by claim_id and claim_object
+        next_claim_id: u256,
+        claims: Map<u256, InsuranceClaim>,
+        claims_vec: Vec<InsuranceClaim>,
+        settled_claims: Vec<InsuranceClaim>,
+        repudiated_claims: Vec<InsuranceClaim>,
+        escalated_claims: Vec<InsuranceClaim>,
+        //Claim Evidences by Claim ID and Array of Proof Urls
+        claim_evidences: Map<u256, Vec<ByteArray>>,
+        treasury_address: ContractAddress,
+        governance_address: ContractAddress,
+        proposal_form_address: ContractAddress,
+        policy_minting_address: ContractAddress,
 
-//         // Tracking and analytics
-//         total_claims_paid: Uint256,
-//         total_premiums_collected: Uint256,
-//         claim_approvals: LegacyMap::<(u256, ContractAddress), bool>
-//     }
+        auto_approval_limit: u256,
+        max_claim_amount_payable: u256,
+        number_of_approved_claims: u256,
+        number_of_repudiated_claims: u256,
+        amount_of_approved_claims: u256,
+        amount_of_repudiated_claims: u256
+    }
 
-//     #[abi(embed_v0)]
-//     impl AccessControlImpl = AccessControlComponent::AccessControlImpl<ContractState>;
-//     impl AccessControlInternalImpl = AccessControlComponent::InternalImpl<ContractState>;
 
-//     #[abi(embed_v0)]
-//     impl PausableImpl = PausableComponent::PausableImpl<ContractState>;
-//     impl PausableInternalImpl = PausableComponent::InternalImpl<ContractState>;
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        #[flat]
+        AccessControlEvent: AccessControlComponent::Event,
+        #[flat]
+        SRC5Event: SRC5Component::Event,
+        #[flat]
+        UpgradeableEvent: UpgradeableComponent::Event,
 
-//     #[abi(embed_v0)]
-//     impl ReentrancyGuardImpl = ReentrancyGuardComponent::ReentrancyGuardImpl<ContractState>;
-//     impl ReentrancyGuardInternalImpl = ReentrancyGuardComponent::InternalImpl<ContractState>;
+        ClaimSubmitted: ClaimSubmitted,
+        ClaimUpdated: ClaimUpdated,
+        ClaimDenied: ClaimRepudiated,
+        ClaimApproved: ClaimApproved,
+        ClaimPaid: ClaimPaid,
+        ClaimEscalated: ClaimEscalated
+    }
 
-//     #[constructor]
-//     fn constructor(
-//         ref self: ContractState,
-//         admin: ContractAddress,
-//         treasury: ContractAddress,
-//         governance: ContractAddress,
-//         adjusters: Array<ContractAddress>,
-//         approvers: Array<ContractAddress>
-//     ) {
-//         // Initialize OpenZeppelin components
-//         self.access.initializer();
-//         self.pausable.initializer();
-//         self.reentrancy_guard.initializer();
+    #[constructor]
+    fn constructor(
+        ref self: ContractState,
+        admin_address: ContractAddress,
+    ) {
 
-//         // Setup roles
-//         self.access._grant_role(DEFAULT_ADMIN_ROLE, admin);
-//         self.access._grant_role(CLAIM_ADJUSTER_ROLE, admin);
-//         self.access._grant_role(CLAIM_APPROVER_ROLE, admin);
-//         self.access._grant_role(EMERGENCY_MANAGER_ROLE, admin);
+        self.accesscontrol.initializer();
+        self.accesscontrol._grant_role(AccessControlComponent::DEFAULT_ADMIN_ROLE, admin_address);
+        self.accesscontrol._grant_role(ADMIN_ROLE, admin_address);
+        self.next_claim_id.write(1);
+    }
 
-//         // Grant roles to provided addresses
-//         self._grant_roles_to_array(CLAIM_ADJUSTER_ROLE, adjusters);
-//         self._grant_roles_to_array(CLAIM_APPROVER_ROLE, approvers);
 
-//         // Set contract addresses
-//         self.treasury_contract.write(treasury);
-//         self.governance_contract.write(governance);
+    #[abi(embed_v0)]
+    pub impl InsuranceClaimsImpl of IClaim<ContractState> {
+        fn file_claim(
+            ref self: ContractState,
+            policy_id: u256,
+            claimant: ContractAddress,
+            claim_description: ByteArray,
+            claim_amount: u256,
+            alternative_account: ContractAddress,
+            policy_class_code: u8,
+            proof_urls: Array<ByteArray>
+        ) -> u256 {
 
-//         // Initialize claim parameters
-//         self.auto_approval_limit.write(Uint256 { low: 100000000000000000u128, high: 0 }); // 0.1 ETH
-//         self.max_claim_amount.write(Uint256 { low: 10000000000000000000u128, high: 0 }); // 10 ETH
+            let current_claim_id: u256 = self.next_claim_id.read();
+            let current_date: u64 = get_block_timestamp();
+            
+            let policy_mint_dispatcher: IPolicyNFTDispatcher = IPolicyNFTDispatcher { contract_address: self.policy_minting_address.read() };
+            
+            let claimant_policy: PolicyDataResponse = policy_mint_dispatcher.get_policy_data(policy_id);
 
-//         // Set approval requirements by claim type
-//         self.approval_requirements.write(TYPE_SMALL, 1);
-//         self.approval_requirements.write(TYPE_MEDIUM, 2);
-//         self.approval_requirements.write(TYPE_LARGE, 3);
-//         self.approval_requirements.write(TYPE_CATASTROPHIC, 5);
+            let claimant_from_policy: ContractAddress = claimant_policy.policyholder;
 
-//         // Set claim thresholds
-//         self.claim_thresholds.write(TYPE_SMALL, Uint256 { low: 50000000000000000u128, high: 0 }); // 0.05 ETH
-//         self.claim_thresholds.write(TYPE_MEDIUM, Uint256 { low: 500000000000000000u128, high: 0 }); // 0.5 ETH
-//         self.claim_thresholds.write(TYPE_LARGE, Uint256 { low: 5000000000000000000u128, high: 0 }); // 5 ETH
-//     }
+            assert!(claimant == claimant_from_policy, "Unauthorized: Claimant Address does not match with Policyholder Address on Policy Data");
 
-//     // ========== CLAIM SUBMISSION ==========
 
-//     #[external(v0)]
-//     fn submit_claim(
-//         ref self: ContractState,
-//         policy_id: u256,
-//         amount: Uint256,
-//         currency: ContractAddress,
-//         evidence_hash: felt252,
-//         description: felt252
-//     ) -> u256 {
-//         self.pausable.assert_not_paused();
-//         assert(amount > Uint256 { low: 0, high: 0 }, 'Claim amount must be positive');
-//         assert(amount <= self.max_claim_amount.read(), 'Claim exceeds maximum amount');
+            let proof_urls_length: u32 = proof_urls.len().into();
 
-//         let claimant = get_caller_address();
-//         let claim_id = self.claim_nonce.read();
+            for i in 0..proof_urls_length {
+
+                let mut my_byte_array: ByteArray = proof_urls.at(i).clone();      
+                self.claim_evidences.entry(current_claim_id).push(my_byte_array);
+
+            }
+
+
+
+            let new_claim: InsuranceClaim = InsuranceClaim {
+                claim_id: current_claim_id,
+                policy_id: policy_id,
+                proposal_id: claimant_policy.proposal_id,
+                claimant: claimant,
+                claim_description: claim_description,
+                claim_amount: claim_amount,
+                alternative_account: alternative_account,
+                policy_class_code: policy_class_code,
+                claim_status_code: 0,
+                claim_type_code: 4,
+                submission_date: current_date,
+                updated_at: current_date,
+                is_approved: false,
+                approved_at: 0,
+                is_repudiated: false,
+                repudiated_at: 0,
+                risk_analytics_approved: false,
+                governance_approved: false,
+                is_escalated: false,
+                escalation_reason: "",
+                repudiation_reason_code: 100
+            };
+
+            policy_mint_dispatcher.add_claim_to_policy(policy_id, current_claim_id, claim_amount);
+
+            self.claims_vec.push(new_claim.clone());
+
+            self.claims.write(current_claim_id, new_claim);
+
+            let incremented_claim_id: u256 = current_claim_id + 1;
+
+            self.next_claim_id.write(incremented_claim_id);
+
+            let submission_event: ClaimSubmitted = ClaimSubmitted {
+                claim_id: current_claim_id,
+                policy_id: policy_id,
+                claimant: claimant,
+                amount: claim_amount,
+                claim_type: ClaimType::Undetermined
+            };
+
+            self.emit(submission_event);
+
+            current_claim_id
+        }
+    
+        fn update_claim(
+            ref self: ContractState,
+            claim_id: u256,
+            policy_id: u256,
+            claimant: ContractAddress,
+            claim_description: ByteArray,
+            claim_amount: u256,
+            alternative_account: ContractAddress,
+            policy_class_code: u8,
+            proof_urls: Array<ByteArray>
+        ) {
+
+            let current_date: u64 = get_block_timestamp();
+
+            let claim_to_update: InsuranceClaim = self.claims.read(claim_id);
+            
+            let policy_mint_dispatcher: IPolicyNFTDispatcher = IPolicyNFTDispatcher { contract_address: self.policy_minting_address.read() };
+            
+            let claimant_policy: PolicyDataResponse = policy_mint_dispatcher.get_policy_data(policy_id);
+
+            let claimant_from_policy: ContractAddress = claimant_policy.policyholder;
+
+            assert!(claimant == claimant_from_policy, "Unauthorized: Claimant Account Address does not match with Policyholder Account Address on Policy Data");
+
+
+            let proof_urls_length: u32 = proof_urls.len().into();
+
+            for i in 0..proof_urls_length {
+
+                let mut my_byte_array: ByteArray = proof_urls.at(i).clone();      
+                self.claim_evidences.entry(claim_to_update.claim_id).push(my_byte_array);
+                
+            }
+
+
+            let updated_claim: InsuranceClaim = InsuranceClaim {
+                claim_id: claim_to_update.claim_id,
+                policy_id: policy_id,
+                proposal_id: claimant_policy.proposal_id,
+                claimant: claimant,
+                claim_description: claim_description,
+                claim_amount: claim_amount,
+                alternative_account: alternative_account,
+                policy_class_code: policy_class_code,
+                claim_status_code: claim_to_update.claim_status_code,
+                claim_type_code: claim_to_update.claim_type_code,
+                submission_date: claim_to_update.submission_date,
+                updated_at: current_date,
+                is_approved: claim_to_update.is_approved,
+                approved_at: claim_to_update.approved_at,
+                is_repudiated: claim_to_update.is_repudiated,
+                repudiated_at: claim_to_update.repudiated_at,
+                risk_analytics_approved: claim_to_update.risk_analytics_approved,
+                governance_approved: claim_to_update.governance_approved,
+                is_escalated: claim_to_update.is_escalated,
+                escalation_reason: claim_to_update.escalation_reason,
+                repudiation_reason_code: claim_to_update.repudiation_reason_code
+            };
+
+
+            self.claims.write(claim_to_update.claim_id, updated_claim);
+
+            let update_event: ClaimUpdated = ClaimUpdated {
+                claim_id: claim_to_update.claim_id,
+                policy_id: claim_to_update.policy_id,
+                claimant: claim_to_update.claimant,
+                amount: claim_to_update.claim_amount,
+                claim_type: convert_claim_code_to_type(claim_to_update.claim_type_code)
+            };
+
+            self.emit(update_event);
+
+        }
+    
+        fn get_claim_by_id(
+            self: @ContractState,
+            claim_id: u256
+        ) -> InsuranceClaimResponse {
+
+            let sought_claim: InsuranceClaim = self.claims.read(claim_id);
+
+            let mut proof_urls: Array<ByteArray> = array![];
+
+            let len: u64 = self.claim_evidences.entry(sought_claim.claim_id).len();
+
+            for i in 0..len {
+                let mut each_url: ByteArray = self.claim_evidences.entry(sought_claim.claim_id).at(i).read();
+                proof_urls.append(each_url);
+            }
+
+            let claim_response: InsuranceClaimResponse = InsuranceClaimResponse {
+                claim_id: sought_claim.claim_id,
+                policy_id: sought_claim.policy_id,
+                proposal_id: sought_claim.proposal_id,
+                claimant: sought_claim.claimant,
+                claim_description: sought_claim.claim_description,
+                claim_amount: sought_claim.claim_amount,
+                alternative_account: sought_claim.alternative_account,
+                policy_class: convert_policy_code_to_class(sought_claim.policy_class_code),
+                claim_status: convert_claim_code_to_status(sought_claim.claim_status_code),
+                claim_type: convert_claim_code_to_type(sought_claim.claim_type_code),
+                submission_date: sought_claim.submission_date,
+                updated_at: sought_claim.updated_at,
+                is_approved: sought_claim.is_approved,
+                approved_at: sought_claim.approved_at,
+                is_repudiated: sought_claim.is_repudiated,
+                repudiated_at: sought_claim.repudiated_at,
+                risk_analytics_approved: sought_claim.risk_analytics_approved,
+                governance_approved: sought_claim.governance_approved,
+                is_escalated: sought_claim.is_escalated,
+                escalation_reason: sought_claim.escalation_reason,
+                claim_evidence_urls: proof_urls,
+                repudiation_reason: convert_repudiation_code_to_reason(sought_claim.repudiation_reason_code)
+            };
+
+            claim_response
+        }
+
+        fn get_claim_evidence_urls_for_current_claim(
+            self: @ContractState,
+            claim_id: u256
+        ) -> Array<ByteArray> {
+
+
+            let sought_claim: InsuranceClaim = self.claims.read(claim_id);
+            
+            let mut proof_urls: Array<ByteArray> = array![];
+
+            let len: u64 = self.claim_evidences.entry(sought_claim.claim_id).len();
+
+            for i in 0..len {
+                let mut each_url: ByteArray = self.claim_evidences.entry(sought_claim.claim_id).at(i).read();
+                proof_urls.append(each_url);
+            }
+
+            proof_urls
+        }
+    
+        fn assess_claim_by_risk_analytics(
+            ref self: ContractState,
+            claim_id: u256,
+            risk_analytics_approved: bool,
+            is_approved: bool,
+            is_repudiated: bool,
+            repudiation_reason_code: u8,
+            claim_status_code: u8,
+            claim_type_code: u8
+        ) {
+
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+
+
+            let current_date: u64 = get_block_timestamp();
+
+            let claim_to_assess: InsuranceClaim = self.claims.read(claim_id);
+            
+            let policy_mint_dispatcher: IPolicyNFTDispatcher = IPolicyNFTDispatcher { contract_address: self.policy_minting_address.read() };
+            
+            let claimant_policy: PolicyDataResponse = policy_mint_dispatcher.get_policy_data(claim_to_assess.policy_id);
+
+            let claimant_from_policy: ContractAddress = claimant_policy.policyholder;
+
+            let claimant: ContractAddress = claim_to_assess.claimant;
+
+            assert!(claimant == claimant_from_policy, "Unauthorized: Claimant Address does not match with Policyholder Address on Policy Data");
+
+            let assessed_claim: InsuranceClaim = InsuranceClaim {
+                claim_id: claim_to_assess.claim_id,
+                policy_id: claim_to_assess.policy_id,
+                proposal_id: claimant_policy.proposal_id,
+                claimant: claimant,
+                claim_description: claim_to_assess.claim_description,
+                claim_amount: claim_to_assess.claim_amount,
+                alternative_account: claim_to_assess.alternative_account,
+                policy_class_code: claim_to_assess.policy_class_code,
+                claim_status_code: claim_status_code,
+                claim_type_code: claim_type_code,
+                submission_date: claim_to_assess.submission_date,
+                updated_at: claim_to_assess.updated_at,
+                is_approved: is_approved,
+                approved_at: current_date,
+                is_repudiated: is_repudiated,
+                repudiated_at: current_date,
+                risk_analytics_approved: risk_analytics_approved,
+                governance_approved: claim_to_assess.governance_approved,
+                is_escalated: claim_to_assess.is_escalated,
+                escalation_reason: claim_to_assess.escalation_reason,
+                repudiation_reason_code: repudiation_reason_code
+            };
+
+            self.claims.write(claim_to_assess.claim_id, assessed_claim);
+        }
+    
+        fn assess_claim_by_governance(
+            ref self: ContractState,
+            claim_id: u256,
+            governance_approved: bool,
+            is_approved: bool,
+            is_repudiated: bool,
+            repudiation_reason_code: u8,
+            claim_status_code: u8,
+            claim_type_code: u8
+        ) {
+
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+
+
+            let current_date: u64 = get_block_timestamp();
+
+            let claim_to_assess: InsuranceClaim = self.claims.read(claim_id);
+            
+            let policy_mint_dispatcher: IPolicyNFTDispatcher = IPolicyNFTDispatcher { contract_address: self.policy_minting_address.read() };
+            
+            let claimant_policy: PolicyDataResponse = policy_mint_dispatcher.get_policy_data(claim_to_assess.policy_id);
+
+            let claimant_from_policy: ContractAddress = claimant_policy.policyholder;
+
+            let claimant: ContractAddress = claim_to_assess.claimant;
+
+            assert!(claimant == claimant_from_policy, "Unauthorized: Claimant Address does not match with Policyholder Address on Policy Data");
+
+            let assessed_claim: InsuranceClaim = InsuranceClaim {
+                claim_id: claim_to_assess.claim_id,
+                policy_id: claim_to_assess.policy_id,
+                proposal_id: claimant_policy.proposal_id,
+                claimant: claimant,
+                claim_description: claim_to_assess.claim_description,
+                claim_amount: claim_to_assess.claim_amount,
+                alternative_account: claim_to_assess.alternative_account,
+                policy_class_code: claim_to_assess.policy_class_code,
+                claim_status_code: claim_status_code,
+                claim_type_code: claim_type_code,
+                submission_date: claim_to_assess.submission_date,
+                updated_at: claim_to_assess.updated_at,
+                is_approved: is_approved,
+                approved_at: current_date,
+                is_repudiated: is_repudiated,
+                repudiated_at: current_date,
+                risk_analytics_approved: claim_to_assess.risk_analytics_approved,
+                governance_approved: governance_approved,
+                is_escalated: claim_to_assess.is_escalated,
+                escalation_reason: claim_to_assess.escalation_reason,
+                repudiation_reason_code: repudiation_reason_code
+            };
+
+            self.claims.write(claim_to_assess.claim_id, assessed_claim);
+        }
+
+
+        fn set_claim_as_settled(
+            ref self: ContractState,
+            claim_id: u256
+        ) {
+
+            let mut sought_claim: InsuranceClaim = self.claims.read(claim_id);
+
+            let settled_claim: InsuranceClaim = InsuranceClaim {
+                claim_id: sought_claim.claim_id,
+                policy_id: sought_claim.policy_id,
+                proposal_id: sought_claim.proposal_id,
+                claimant: sought_claim.claimant,
+                claim_description: sought_claim.claim_description,
+                claim_amount: sought_claim.claim_amount,
+                alternative_account: sought_claim.alternative_account,
+                policy_class_code: sought_claim.policy_class_code,
+                claim_status_code: convert_claim_status_to_code(ClaimStatus::Settled),
+                claim_type_code: sought_claim.claim_type_code,
+                submission_date: sought_claim.submission_date,
+                updated_at: sought_claim.updated_at,
+                is_approved: sought_claim.is_approved,
+                approved_at: sought_claim.approved_at,
+                is_repudiated: sought_claim.is_repudiated,
+                repudiated_at: sought_claim.repudiated_at,
+                risk_analytics_approved: sought_claim.risk_analytics_approved,
+                governance_approved: sought_claim.governance_approved,
+                is_escalated: sought_claim.is_escalated,
+                escalation_reason: sought_claim.escalation_reason,
+                repudiation_reason_code: sought_claim.repudiation_reason_code
+
+            };
+
+
+            self.claims.write(sought_claim.claim_id, settled_claim.clone());
+            self.settled_claims.push(settled_claim);
+        }
+    
+        fn set_claim_as_repudiated(
+            ref self: ContractState,
+            claim_id: u256
+        ) {
+
+            let mut sought_claim: InsuranceClaim = self.claims.read(claim_id);
+
+            let repudiated_claim: InsuranceClaim = InsuranceClaim {
+                claim_id: sought_claim.claim_id,
+                policy_id: sought_claim.policy_id,
+                proposal_id: sought_claim.proposal_id,
+                claimant: sought_claim.claimant,
+                claim_description: sought_claim.claim_description,
+                claim_amount: sought_claim.claim_amount,
+                alternative_account: sought_claim.alternative_account,
+                policy_class_code: sought_claim.policy_class_code,
+                claim_status_code: convert_claim_status_to_code(ClaimStatus::Repudiated),
+                claim_type_code: sought_claim.claim_type_code,
+                submission_date: sought_claim.submission_date,
+                updated_at: sought_claim.updated_at,
+                is_approved: sought_claim.is_approved,
+                approved_at: sought_claim.approved_at,
+                is_repudiated: sought_claim.is_repudiated,
+                repudiated_at: sought_claim.repudiated_at,
+                risk_analytics_approved: sought_claim.risk_analytics_approved,
+                governance_approved: sought_claim.governance_approved,
+                is_escalated: sought_claim.is_escalated,
+                escalation_reason: sought_claim.escalation_reason,
+                repudiation_reason_code: sought_claim.repudiation_reason_code
+
+            };
+
+
+            self.claims.write(sought_claim.claim_id, repudiated_claim.clone());
+            self.repudiated_claims.push(repudiated_claim);
+
+        }
+    
+        fn get_settled_claims(
+            self: @ContractState
+        ) -> Array<InsuranceClaimResponse> {
+
+
+            let mut response_array: Array<InsuranceClaimResponse> = array![];
+
+            let len: u64 = self.settled_claims.len().into();
+
+            for i in 0..len {
+
+                let desired_claim: InsuranceClaim = self.settled_claims.at(i).read();
+
+                let proof_urls: Array<ByteArray> = self._get_claim_evidence_urls_for_current_claim(desired_claim.claim_id);
+
+                
+
+                let each_response_obj: InsuranceClaimResponse = InsuranceClaimResponse {
+                    claim_id: desired_claim.claim_id,
+                    policy_id: desired_claim.policy_id,
+                    proposal_id: desired_claim.proposal_id,
+                    claimant: desired_claim.claimant,
+                    claim_description: desired_claim.claim_description,
+                    claim_amount: desired_claim.claim_amount,
+                    alternative_account: desired_claim.alternative_account,
+                    policy_class: convert_policy_code_to_class(desired_claim.policy_class_code),
+                    claim_status: convert_claim_code_to_status(desired_claim.claim_status_code),
+                    claim_type: convert_claim_code_to_type(desired_claim.claim_type_code),
+                    submission_date: desired_claim.submission_date,
+                    updated_at: desired_claim.updated_at,
+                    is_approved: desired_claim.is_approved,
+                    approved_at: desired_claim.approved_at,
+                    is_repudiated: desired_claim.is_repudiated,
+                    repudiated_at: desired_claim.repudiated_at,
+                    risk_analytics_approved: desired_claim.risk_analytics_approved,
+                    governance_approved: desired_claim.governance_approved,
+                    is_escalated: desired_claim.is_escalated,
+                    escalation_reason: desired_claim.escalation_reason.clone(),
+                    claim_evidence_urls: proof_urls,
+                    repudiation_reason: convert_repudiation_code_to_reason(desired_claim.repudiation_reason_code)
+                };
+
+                response_array.append(each_response_obj);
+               
+             
+            };
+
+            response_array
+
+        }
+    
+        fn get_repudiated_claims(
+            self: @ContractState
+        ) -> Array<InsuranceClaimResponse> {
+
+            let mut response_array: Array<InsuranceClaimResponse> = array![];
+
+            let len: u64 = self.repudiated_claims.len().into();
+
+            for i in 0..len {
+
+                let desired_claim: InsuranceClaim = self.repudiated_claims.at(i).read();
+
+                let proof_urls: Array<ByteArray> = self._get_claim_evidence_urls_for_current_claim(desired_claim.claim_id);
+
+                
+
+                let each_response_obj: InsuranceClaimResponse = InsuranceClaimResponse {
+                    claim_id: desired_claim.claim_id,
+                    policy_id: desired_claim.policy_id,
+                    proposal_id: desired_claim.proposal_id,
+                    claimant: desired_claim.claimant,
+                    claim_description: desired_claim.claim_description,
+                    claim_amount: desired_claim.claim_amount,
+                    alternative_account: desired_claim.alternative_account,
+                    policy_class: convert_policy_code_to_class(desired_claim.policy_class_code),
+                    claim_status: convert_claim_code_to_status(desired_claim.claim_status_code),
+                    claim_type: convert_claim_code_to_type(desired_claim.claim_type_code),
+                    submission_date: desired_claim.submission_date,
+                    updated_at: desired_claim.updated_at,
+                    is_approved: desired_claim.is_approved,
+                    approved_at: desired_claim.approved_at,
+                    is_repudiated: desired_claim.is_repudiated,
+                    repudiated_at: desired_claim.repudiated_at,
+                    risk_analytics_approved: desired_claim.risk_analytics_approved,
+                    governance_approved: desired_claim.governance_approved,
+                    is_escalated: desired_claim.is_escalated,
+                    escalation_reason: desired_claim.escalation_reason.clone(),
+                    claim_evidence_urls: proof_urls,
+                    repudiation_reason: convert_repudiation_code_to_reason(desired_claim.repudiation_reason_code)
+                };
+
+                response_array.append(each_response_obj);
+               
+             
+            };
+
+            response_array
+
+        }
+    
+        fn get_pending_claims(
+            self: @ContractState
+        ) -> Array<InsuranceClaimResponse> {
+
+            let mut response_array: Array<InsuranceClaimResponse> = array![];
+
+            let pending_claims_array: Array<InsuranceClaim> = self._filter_out_settled_and_repudiated_claims();
+
+            let len: u32 = pending_claims_array.len().into();
+
+            for i in 0..len {
+
+                let desired_claim: InsuranceClaim = pending_claims_array.at(i).clone();
+
+                let proof_urls: Array<ByteArray> = self._get_claim_evidence_urls_for_current_claim(desired_claim.claim_id);
+
+                
+
+                let each_response_obj: InsuranceClaimResponse = InsuranceClaimResponse {
+                    claim_id: desired_claim.claim_id,
+                    policy_id: desired_claim.policy_id,
+                    proposal_id: desired_claim.proposal_id,
+                    claimant: desired_claim.claimant,
+                    claim_description: desired_claim.claim_description,
+                    claim_amount: desired_claim.claim_amount,
+                    alternative_account: desired_claim.alternative_account,
+                    policy_class: convert_policy_code_to_class(desired_claim.policy_class_code),
+                    claim_status: convert_claim_code_to_status(desired_claim.claim_status_code),
+                    claim_type: convert_claim_code_to_type(desired_claim.claim_type_code),
+                    submission_date: desired_claim.submission_date,
+                    updated_at: desired_claim.updated_at,
+                    is_approved: desired_claim.is_approved,
+                    approved_at: desired_claim.approved_at,
+                    is_repudiated: desired_claim.is_repudiated,
+                    repudiated_at: desired_claim.repudiated_at,
+                    risk_analytics_approved: desired_claim.risk_analytics_approved,
+                    governance_approved: desired_claim.governance_approved,
+                    is_escalated: desired_claim.is_escalated,
+                    escalation_reason: desired_claim.escalation_reason.clone(),
+                    claim_evidence_urls: proof_urls,
+                    repudiation_reason: convert_repudiation_code_to_reason(desired_claim.repudiation_reason_code)
+                };
+
+                response_array.append(each_response_obj);
+               
+             
+            };
+
+            response_array
+
+        }
+    
+        fn get_all_claims(
+            self: @ContractState
+        ) -> Array<InsuranceClaimResponse> {
+
+            let mut response_array: Array<InsuranceClaimResponse> = array![];
+
+            let len: u64 = self.claims_vec.len().into();
+
+            for i in 0..len {
+
+                let desired_claim: InsuranceClaim = self.claims_vec.at(i).read();
+
+                let proof_urls: Array<ByteArray> = self._get_claim_evidence_urls_for_current_claim(desired_claim.claim_id);
+
+                
+
+                let each_response_obj: InsuranceClaimResponse = InsuranceClaimResponse {
+                    claim_id: desired_claim.claim_id,
+                    policy_id: desired_claim.policy_id,
+                    proposal_id: desired_claim.proposal_id,
+                    claimant: desired_claim.claimant,
+                    claim_description: desired_claim.claim_description,
+                    claim_amount: desired_claim.claim_amount,
+                    alternative_account: desired_claim.alternative_account,
+                    policy_class: convert_policy_code_to_class(desired_claim.policy_class_code),
+                    claim_status: convert_claim_code_to_status(desired_claim.claim_status_code),
+                    claim_type: convert_claim_code_to_type(desired_claim.claim_type_code),
+                    submission_date: desired_claim.submission_date,
+                    updated_at: desired_claim.updated_at,
+                    is_approved: desired_claim.is_approved,
+                    approved_at: desired_claim.approved_at,
+                    is_repudiated: desired_claim.is_repudiated,
+                    repudiated_at: desired_claim.repudiated_at,
+                    risk_analytics_approved: desired_claim.risk_analytics_approved,
+                    governance_approved: desired_claim.governance_approved,
+                    is_escalated: desired_claim.is_escalated,
+                    escalation_reason: desired_claim.escalation_reason.clone(),
+                    claim_evidence_urls: proof_urls,
+                    repudiation_reason: convert_repudiation_code_to_reason(desired_claim.repudiation_reason_code)
+                };
+
+                response_array.append(each_response_obj);
+               
+             
+            };
+
+            response_array
+
+        }
+
+        fn get_escalated_claims(
+            self: @ContractState
+        ) -> Array<InsuranceClaimResponse> {
+
+            let mut response_array: Array<InsuranceClaimResponse> = array![];
+
+            let len: u64 = self.escalated_claims.len().into();
+
+            for i in 0..len {
+
+                let desired_claim: InsuranceClaim = self.escalated_claims.at(i).read();
+
+                      let proof_urls: Array<ByteArray> = self._get_claim_evidence_urls_for_current_claim(desired_claim.claim_id);
+
+                
+
+                let each_response_obj: InsuranceClaimResponse = InsuranceClaimResponse {
+                    claim_id: desired_claim.claim_id,
+                    policy_id: desired_claim.policy_id,
+                    proposal_id: desired_claim.proposal_id,
+                    claimant: desired_claim.claimant,
+                    claim_description: desired_claim.claim_description,
+                    claim_amount: desired_claim.claim_amount,
+                    alternative_account: desired_claim.alternative_account,
+                    policy_class: convert_policy_code_to_class(desired_claim.policy_class_code),
+                    claim_status: convert_claim_code_to_status(desired_claim.claim_status_code),
+                    claim_type: convert_claim_code_to_type(desired_claim.claim_type_code),
+                    submission_date: desired_claim.submission_date,
+                    updated_at: desired_claim.updated_at,
+                    is_approved: desired_claim.is_approved,
+                    approved_at: desired_claim.approved_at,
+                    is_repudiated: desired_claim.is_repudiated,
+                    repudiated_at: desired_claim.repudiated_at,
+                    risk_analytics_approved: desired_claim.risk_analytics_approved,
+                    governance_approved: desired_claim.governance_approved,
+                    is_escalated: desired_claim.is_escalated,
+                    escalation_reason: desired_claim.escalation_reason.clone(),
+                    claim_evidence_urls: proof_urls,
+                    repudiation_reason: convert_repudiation_code_to_reason(desired_claim.repudiation_reason_code)
+                };
+
+                response_array.append(each_response_obj);
+               
+             
+            };
+
+            response_array
+
+        }
+    
+    
+        fn escalate_claim(
+            ref self: ContractState,
+            claim_id: u256,
+            is_escalated: bool,
+            escalation_reason: ByteArray,
+            proof_urls: Array<ByteArray>
+        ) {
+
+            let current_date: u64 = get_block_timestamp();
+
+            let claim_to_update: InsuranceClaim = self.claims.read(claim_id);
+            
+            let policy_mint_dispatcher: IPolicyNFTDispatcher = IPolicyNFTDispatcher { contract_address: self.policy_minting_address.read() };
+            
+            let claimant_policy: PolicyDataResponse = policy_mint_dispatcher.get_policy_data(claim_to_update.policy_id);
+
+            let claimant_from_policy: ContractAddress = claimant_policy.policyholder;
+
+            let claimant: ContractAddress = claim_to_update.claimant;
+
+            assert!(claimant == claimant_from_policy, "Unauthorized: Claimant Account Address does not match with Policyholder Account Address on Policy Data");
+
+
+            let proof_urls_length: u32 = proof_urls.len().into();
+
+            for i in 0..proof_urls_length {
+
+                let mut my_byte_array: ByteArray = proof_urls.at(i).clone();      
+                self.claim_evidences.entry(claim_to_update.claim_id).push(my_byte_array);
+                
+            }
+
+
+            let updated_claim: InsuranceClaim = InsuranceClaim {
+                claim_id: claim_to_update.claim_id,
+                policy_id: claim_to_update.policy_id,
+                proposal_id: claimant_policy.proposal_id,
+                claimant: claimant,
+                claim_description: claim_to_update.claim_description,
+                claim_amount: claim_to_update.claim_amount,
+                alternative_account: claim_to_update.alternative_account,
+                policy_class_code: claim_to_update.policy_class_code,
+                claim_status_code: claim_to_update.claim_status_code,
+                claim_type_code: claim_to_update.claim_type_code,
+                submission_date: claim_to_update.submission_date,
+                updated_at: current_date,
+                is_approved: claim_to_update.is_approved,
+                approved_at: claim_to_update.approved_at,
+                is_repudiated: claim_to_update.is_repudiated,
+                repudiated_at: claim_to_update.repudiated_at,
+                risk_analytics_approved: claim_to_update.risk_analytics_approved,
+                governance_approved: claim_to_update.governance_approved,
+                is_escalated: is_escalated,
+                escalation_reason: escalation_reason,
+                repudiation_reason_code: claim_to_update.repudiation_reason_code
+            };
+
+
+            self.escalated_claims.push(updated_claim.clone());
+
+            self.claims.write(claim_to_update.claim_id, updated_claim);
+
+
+        }
+    
+        fn settle_claim(
+            ref self: ContractState,
+            claim_id: u256,
+        ) {
+
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+
+
+            let claim_to_settle: InsuranceClaim = self.claims.read(claim_id);
+
+            let policy_mint_dispatcher: IPolicyNFTDispatcher = IPolicyNFTDispatcher { contract_address: self.policy_minting_address.read() };
+            
+            let claimant_policy: PolicyDataResponse = policy_mint_dispatcher.get_policy_data(claim_to_settle.policy_id);
+
+            let claimant_from_policy: ContractAddress = claimant_policy.policyholder;
+
+            let claimant: ContractAddress = claim_to_settle.claimant;
+
+            let is_risk_analytics_approved: bool = claim_to_settle.risk_analytics_approved;
+            let is_governance_approved: bool = claim_to_settle.governance_approved;
+
+            let approval_decision: bool = is_claim_approved_for_settlement(is_risk_analytics_approved, is_governance_approved);
+
+            assert!(claimant == claimant_from_policy, "Unauthorized: Claimant Account Address does not match with Policyholder Account Address on Policy Data");
+            
+            assert!(approval_decision, "SettlementDenied: Claim is neither approved by Risk Analytics nor Governance");
+
+            /////Todo whenever Treasury Contract is ready
         
-//         // Determine claim type based on amount
-//         let claim_type = self._determine_claim_type(amount);
-//         let approval_threshold = self.approval_requirements.read(claim_type);
 
-//         let claim = InsuranceClaim {
-//             policy_id: policy_id,
-//             claimant: claimant,
-//             amount: amount,
-//             currency: currency,
-//             status: STATUS_PENDING,
-//             claim_type: claim_type,
-//             timestamp: get_block_timestamp(),
-//             approved_at: 0,
-//             evidence_hash: evidence_hash,
-//             approval_threshold: approval_threshold,
-//             current_approvals: 0,
-//             escalation_reason: ''
-//         };
 
-//         // Store evidence
-//         let evidence = ClaimEvidence {
-//             description: description,
-//             proof_hash: evidence_hash,
-//             witnesses: Array::new(),
-//             external_reports: Array::new()
-//         };
+        }
+    
+        fn set_treasury_address(
+            ref self: ContractState,
+            treasury_address: ContractAddress
+        ) {
 
-//         self.claims.write(claim_id, claim);
-//         self.claim_evidence.write(claim_id, evidence);
-//         self.claim_nonce.write(claim_id + 1);
+            let caller: ContractAddress = get_caller_address();
 
-//         self.emit(ClaimSubmitted {
-//             claim_id: claim_id,
-//             policy_id: policy_id,
-//             claimant: claimant,
-//             amount: amount,
-//             claim_type: claim_type
-//         });
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
 
-//         // Auto-approve small claims
-//         if amount <= self.auto_approval_limit.read() {
-//             self._auto_approve_claim(claim_id);
-//         }
+            self.treasury_address.write(treasury_address);
+        }
+    
+        fn get_treasury_address(
+            self: @ContractState,
+        ) -> ContractAddress {
 
-//         claim_id
-//     }
+            let treasury_address: ContractAddress = self.treasury_address.read();
 
-//     // ========== CLAIM APPROVAL & MANAGEMENT ==========
+            treasury_address
+        }
+    
+        fn set_proposal_form_address(
+            ref self: ContractState,
+            proposal_form_address: ContractAddress
+        ) {
 
-//     #[external(v0)]
-//     #[access_control(role: "CLAIM_ADJUSTER_ROLE")]
-//     fn review_claim(
-//         ref self: ContractState,
-//         claim_id: u256,
-//         approval: bool,
-//         reason: felt252
-//     ) {
-//         self.pausable.assert_not_paused();
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+
+            self.proposal_form_address.write(proposal_form_address);
+        }
+    
+        fn get_proposal_form_address(
+            self: @ContractState,
+        ) -> ContractAddress {
+
+            let proposal_form_address: ContractAddress = self.proposal_form_address.read();
+
+            proposal_form_address
+        }
+    
+        fn set_policy_minting_address(
+            ref self: ContractState,
+            policy_minting_address: ContractAddress
+        ) {
+
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+
+            self.policy_minting_address.write(policy_minting_address);
+        }
+    
+        fn get_policy_minting_address(
+            self: @ContractState,
+        ) -> ContractAddress {
+
+            let policy_minting_address: ContractAddress = self.policy_minting_address.read();
+
+            policy_minting_address
+
+        }
+    
+        fn set_governance_address(
+            ref self: ContractState,
+            governance_address: ContractAddress
+        ) {
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+
+            self.governance_address.write(governance_address);
+        }
+    
+        fn get_governance_address(
+            self: @ContractState,
+        ) -> ContractAddress {
+
+            let governance_address: ContractAddress = self.governance_address.read();
+
+            governance_address
+        }
+    
+        fn set_auto_approval_limit(
+            ref self: ContractState,
+            auto_approval_limit: u256
+        ) {
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+
+            self.auto_approval_limit.write(auto_approval_limit);
+        }
+    
+        fn get_auto_approval_limit(
+            self: @ContractState,
+        ) -> u256 {
+
+            let auto_approval_limit: u256 = self.auto_approval_limit.read();
+
+            auto_approval_limit
+        }
+    
+        fn set_max_claim_amount_payable(
+            ref self: ContractState,
+            max_claim_amount_payable: u256
+        ) {
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+
+            self.max_claim_amount_payable.write(max_claim_amount_payable);
+        }
+    
+        fn get_max_claim_amount_payable(
+            self: @ContractState,
+        ) -> u256 {
+
+            let max_claim_amount_payable: u256 = self.max_claim_amount_payable.read();
+
+            max_claim_amount_payable
+
+        }    
+    }
+
+    fn is_claim_approved_for_settlement(is_risk_analytics_approved: bool, is_governance_approved: bool) -> bool {
         
-//         let mut claim = self.claims.read(claim_id);
-//         assert(claim.status == STATUS_PENDING || claim.status == STATUS_UNDER_REVIEW, 'Claim not reviewable');
+        if is_risk_analytics_approved {
+            return true;
+        } else if is_governance_approved {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
-//         let reviewer = get_caller_address();
-//         assert(!self.claim_approvals.read((claim_id, reviewer)), 'Already reviewed this claim');
 
-//         if approval {
-//             claim.current_approvals += 1;
-//             self.claim_approvals.write((claim_id, reviewer), true);
+    #[abi(embed_v0)]
+    impl UpgradeableImpl of IUpgradeable<ContractState> {
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
 
-//             if claim.current_approvals >= claim.approval_threshold {
-//                 claim.status = STATUS_APPROVED;
-//                 claim.approved_at = get_block_timestamp();
-//                 self.emit(ClaimApproved {
-//                     claim_id: claim_id,
-//                     approver: reviewer,
-//                     amount: claim.amount,
-//                     timestamp: claim.approved_at
-//                 });
-//             }
-//         } else {
-//             claim.status = STATUS_DENIED;
-//             self.emit(ClaimDenied {
-//                 claim_id: claim_id,
-//                 denier: reviewer,
-//                 reason: reason
-//             });
-//         }
+            let caller: ContractAddress = get_caller_address();
 
-//         self.claims.write(claim_id, claim);
-//     }
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
 
-//     #[external(v0)]
-//     #[access_control(role: "CLAIM_APPROVER_ROLE")]
-//     fn escalate_claim(
-//         ref self: ContractState,
-//         claim_id: u256,
-//         reason: felt252,
-//         new_threshold: u8
-//     ) {
-//         let mut claim = self.claims.read(claim_id);
-//         assert(claim.status == STATUS_PENDING, 'Claim not pending');
-        
-//         claim.status = STATUS_ESCALATED;
-//         claim.approval_threshold = new_threshold;
-//         claim.escalation_reason = reason;
+            self.upgradeable.upgrade(new_class_hash);
+        }
+    }
 
-//         self.claims.write(claim_id, claim);
+        #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        fn _get_claim_evidence_urls_for_current_claim(
+            self: @ContractState,
+            claim_id: u256
+        ) -> Array<ByteArray> {
 
-//         self.emit(ClaimEscalated {
-//             claim_id: claim_id,
-//             escalator: get_caller_address(),
-//             reason: reason,
-//             new_threshold: new_threshold
-//         });
-//     }
 
-//     // ========== CLAIM PAYOUT ==========
+            let sought_claim: InsuranceClaim = self.claims.read(claim_id);
+            
+            let mut proof_urls: Array<ByteArray> = array![];
 
-//     #[external(v0)]
-//     #[access_control(role: "CLAIM_APPROVER_ROLE")]
-//     fn process_payout(ref self: ContractState, claim_id: u256) {
-//         self.pausable.assert_not_paused();
-//         self.reentrancy_guard._non_reentrant(());
-        
-//         let claim = self.claims.read(claim_id);
-//         assert(claim.status == STATUS_APPROVED, 'Claim not approved');
-//         assert(get_block_timestamp() - claim.approved_at >= 86400u64, '24h waiting period not over'); // 24 hours
+            let len: u64 = self.claim_evidences.entry(sought_claim.claim_id).len();
 
-//         // Execute payout through treasury
-//         self._execute_payout(claim.claimant, claim.amount, claim.currency);
+            for i in 0..len {
+                let mut each_url: ByteArray = self.claim_evidences.entry(sought_claim.claim_id).at(i).read();
+                proof_urls.append(each_url);
+            }
 
-//         // Update claim status
-//         let mut updated_claim = claim;
-//         updated_claim.status = STATUS_PAID;
-//         self.claims.write(claim_id, updated_claim);
+            proof_urls
+        }
 
-//         // Update statistics
-//         self.total_claims_paid.write(self.total_claims_paid.read() + claim.amount);
 
-//         self.emit(ClaimPaid {
-//             claim_id: claim_id,
-//             recipient: claim.claimant,
-//             amount: claim.amount,
-//             currency: claim.currency,
-//             tx_hash: 'treasury_payout' // Would be actual tx hash in implementation
-//         });
-//     }
+        fn _filter_out_settled_and_repudiated_claims(
+            self: @ContractState
+        ) -> Array<InsuranceClaim> {
+            let mut filtered_claims_array: Array<InsuranceClaim> = array![];
 
-//     #[external(v0)]
-//     #[access_control(role: "EMERGENCY_MANAGER_ROLE")]
-//     fn emergency_payout(
-//         ref self: ContractState,
-//         claim_id: u256,
-//         reason: felt252
-//     ) {
-//         self.reentrancy_guard._non_reentrant(());
-        
-//         let claim = self.claims.read(claim_id);
-        
-//         // Bypass normal approval process for emergencies
-//         self._execute_payout(claim.claimant, claim.amount, claim.currency);
+            let len: u64 = self.claims_vec.len();
 
-//         let mut updated_claim = claim;
-//         updated_claim.status = STATUS_PAID;
-//         self.claims.write(claim_id, updated_claim);
+            for i in 0..len {
 
-//         self.emit(EmergencyPayout {
-//             claim_id: claim_id,
-//             executor: get_caller_address(),
-//             amount: claim.amount,
-//             reason: reason
-//         });
-//     }
+                let current_status_code: u8 = self.claims_vec.at(i).read().claim_status_code.into();
 
-//     // ========== ADMIN FUNCTIONS ==========
 
-//     #[external(v0)]
-//     #[access_control(role: "DEFAULT_ADMIN_ROLE")]
-//     fn update_claim_parameters(
-//         ref self: ContractState,
-//         claim_type: felt252,
-//         new_threshold: Uint256,
-//         approvals_required: u8
-//     ) {
-//         self.claim_thresholds.write(claim_type, new_threshold);
-//         self.approval_requirements.write(claim_type, approvals_required);
-//     }
+                if current_status_code == convert_claim_status_to_code(ClaimStatus::Repudiated) {
+                    continue;
+                } else if current_status_code == convert_claim_status_to_code(ClaimStatus::Settled) {
+                    continue;
+                } else {
+                    filtered_claims_array.append(self.claims_vec.at(i).read());
+                }
+            }
 
-//     #[external(v0)]
-//     #[access_control(role: "DEFAULT_ADMIN_ROLE")]
-//     fn pause_claims(ref self: ContractState) {
-//         self.pausable._pause();
-//     }
+            filtered_claims_array
+        }
 
-//     #[external(v0)]
-//     #[access_control(role: "DEFAULT_ADMIN_ROLE")]
-//     fn unpause_claims(ref self: ContractState) {
-//         self.pausable._unpause();
-//     }
+    }
 
-//     // ========== VIEW FUNCTIONS ==========
-
-//     #[view]
-//     fn get_claim(self: @ContractState, claim_id: u256) -> InsuranceClaim {
-//         self.claims.read(claim_id)
-//     }
-
-//     #[view]
-//     fn get_claim_evidence(self: @ContractState, claim_id: u256) -> ClaimEvidence {
-//         self.claim_evidence.read(claim_id)
-//     }
-
-//     #[view]
-//     fn get_claim_stats(self: @ContractState) -> (Uint256, Uint256) {
-//         (self.total_claims_paid.read(), self.total_premiums_collected.read())
-//     }
-
-//     #[view]
-//     fn can_auto_approve(self: @ContractState, amount: Uint256) -> bool {
-//         amount <= self.auto_approval_limit.read()
-//     }
-
-//     // ========== INTERNAL FUNCTIONS ==========
-
-//     fn _execute_payout(
-//         ref self: ContractState,
-//         recipient: ContractAddress,
-//         amount: Uint256,
-//         currency: ContractAddress
-//     ) {
-//         // Call treasury contract to execute payout
-//         let treasury_calldata = array![
-//             recipient.into(), 
-//             amount.low.into(), 
-//             amount.high.into(), 
-//             currency.into()
-//         ];
-        
-//         let _ = starknet::call_contract_syscall(
-//             self.treasury_contract.read(),
-//             selector: 'execute_payout',
-//             calldata: treasury_calldata
-//         );
-//     }
-
-//     fn _determine_claim_type(self: @ContractState, amount: Uint256) -> felt252 {
-//         let small_threshold = self.claim_thresholds.read(TYPE_SMALL);
-//         let medium_threshold = self.claim_thresholds.read(TYPE_MEDIUM);
-//         let large_threshold = self.claim_thresholds.read(TYPE_LARGE);
-
-//         if amount <= small_threshold {
-//             TYPE_SMALL
-//         } else if amount <= medium_threshold {
-//             TYPE_MEDIUM
-//         } else if amount <= large_threshold {
-//             TYPE_LARGE
-//         } else {
-//             TYPE_CATASTROPHIC
-//         }
-//     }
-
-//     fn _auto_approve_claim(ref self: ContractState, claim_id: u256) {
-//         let mut claim = self.claims.read(claim_id);
-//         claim.status = STATUS_APPROVED;
-//         claim.approved_at = get_block_timestamp();
-//         claim.current_approvals = claim.approval_threshold;
-        
-//         self.claims.write(claim_id, claim);
-        
-//         self.emit(ClaimApproved {
-//             claim_id: claim_id,
-//             approver: get_contract_address(),
-//             amount: claim.amount,
-//             timestamp: claim.approved_at
-//         });
-//     }
-
-//     fn _grant_roles_to_array(ref self: ContractState, role: felt252, addresses: Array<ContractAddress>) {
-//         loop {
-//             match addresses.pop_front() {
-//                 Option::Some(address) => {
-//                     self.access._grant_role(role, address);
-//                 },
-//                 Option::None(_) => {
-//                     break;
-//                 }
-//             };
-//         }
-//     }
-
-//     fn _assert_has_role(self: @ContractState, role: felt252) {
-//         self.access._assert_has_role(role, get_caller_address());
-//     }
-// }
+}

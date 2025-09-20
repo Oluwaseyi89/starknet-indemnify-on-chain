@@ -1,5 +1,6 @@
 use crate::enums::enums::*;
 
+use crate::enums::enums::ClaimStatus;
 use crate::enums::enums::UpdateType;
 use crate::enums::enums::BurnReason;
 
@@ -181,3 +182,105 @@ pub fn convert_policy_update_type_to_code (update_type: UpdateType) -> u8 {
     code
 }
 
+
+
+
+pub fn convert_claim_status_to_code (status: ClaimStatus) -> u8 {
+
+    let code: u8 = match status {
+        ClaimStatus::Submitted => 0,
+        ClaimStatus::UnderReview => 1,
+        ClaimStatus::Approved => 2,
+        ClaimStatus::Repudiated => 3,
+        ClaimStatus::Settled => 4,
+        ClaimStatus::InvalidStatus => 100
+    };
+
+    code 
+}
+
+
+pub fn convert_claim_code_to_status (code: u8) -> ClaimStatus {
+
+    let status: ClaimStatus = match code {
+        0 => ClaimStatus::Submitted,
+        1 => ClaimStatus::UnderReview,
+        2 => ClaimStatus::Approved,
+        3 => ClaimStatus::Repudiated,
+        4 => ClaimStatus::Settled,
+        _ => ClaimStatus::InvalidStatus
+    };
+
+    status
+}
+
+pub fn convert_repudiation_reason_to_code (reason: ClaimRepudiationReason) -> u8 {
+
+    let code: u8 = match reason {
+        ClaimRepudiationReason::NonDisclosure => 0,
+        ClaimRepudiationReason::Misrepresentation => 1,
+        ClaimRepudiationReason::PolicyExclusion => 2,
+        ClaimRepudiationReason::FraudulentClaim => 3,
+        ClaimRepudiationReason::LapsedPolicy => 4,
+        ClaimRepudiationReason::PolicyTermsAndConditionsBreach => 5,
+        ClaimRepudiationReason::InsufficientDocumentation => 6,
+        ClaimRepudiationReason::IllegalClaim => 7,
+        ClaimRepudiationReason::LackOfInsurableInterest => 8,
+        ClaimRepudiationReason::NotRepudiated => 9,
+        ClaimRepudiationReason::InvalidRepudiationReason => 100
+    };
+
+    code
+}
+
+pub fn convert_repudiation_code_to_reason (code: u8) -> ClaimRepudiationReason {
+
+    let reason: ClaimRepudiationReason = match code {
+        0 => ClaimRepudiationReason::NonDisclosure,
+        1 => ClaimRepudiationReason::Misrepresentation,
+        2 => ClaimRepudiationReason::PolicyExclusion,
+        3 => ClaimRepudiationReason::FraudulentClaim,
+        4 => ClaimRepudiationReason::LapsedPolicy,
+        5 => ClaimRepudiationReason::PolicyTermsAndConditionsBreach,
+        6 => ClaimRepudiationReason::InsufficientDocumentation,
+        7 => ClaimRepudiationReason::IllegalClaim,
+        8 => ClaimRepudiationReason::LackOfInsurableInterest,
+        9 => ClaimRepudiationReason::NotRepudiated,
+        _ => ClaimRepudiationReason::InvalidRepudiationReason
+    };
+
+    reason
+
+}
+
+
+
+pub fn convert_claim_type_to_code (claim_type: ClaimType) -> u8 {
+
+    let code: u8 = match claim_type {
+        ClaimType::Small => 0,
+        ClaimType::Medium => 1,
+        ClaimType::Large => 2,
+        ClaimType::Catastrophic => 3,
+        ClaimType::Undetermined => 4,
+        ClaimType::InvalidClaimType => 100
+    };
+
+    code
+}
+
+
+pub fn convert_claim_code_to_type (code: u8) -> ClaimType {
+    
+    let claim_type: ClaimType = match code {
+        0 => ClaimType::Small,
+        1 => ClaimType::Medium,
+        2 => ClaimType::Large,
+        3 => ClaimType::Catastrophic,
+        4 => ClaimType::Undetermined,
+        _ => ClaimType::InvalidClaimType
+
+    };
+
+    claim_type
+}
