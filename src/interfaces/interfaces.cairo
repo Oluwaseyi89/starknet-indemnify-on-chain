@@ -303,3 +303,225 @@ pub trait IClaim<TContractState> {
 }
 
 
+
+#[starknet::interface] 
+pub trait ITreasuryManagement<TContractState> {
+    fn pay_premium(
+        ref self: TContractState,
+        proposal_id: u256,
+        payer_address: ContractAddress,
+    ) -> u256;
+
+    // fn update_premium_payment(
+    //     ref self: TContractState,
+    //     transaction_id: u256,
+    //     policy_id: u256,
+    //     txn_hash: ByteArray,
+    //     payment_status_code: u8 
+    // );
+
+    // fn get_premium_payment(
+    //     self: @TContractState,
+    //     transaction_id: u256
+    // ) -> PremiumPaymentResponse;
+
+    // fn pay_claim(
+    //     ref self: TContractState,
+    //     policy_id: u256,
+    //     claim_id: u256,
+    //     policyholder: ContractAddress,
+    //     third_party_account: ContractAddress,
+    // ) -> u256;
+
+    // fn update_claim_payment(
+    //     ref self: TContractState,
+    //     transaction_id: u256,
+    //     third_party_account: ContractAddress,
+    //     txn_hash: ByteArray,
+    //     settlement_status_code: u8,
+    //     settlement_source_code: u8
+    // );
+
+    // fn get_claim_payment(
+    //     self: @TContractState,
+    //     transaction_id: u256
+    // ) -> ClaimPaymentResponse;
+
+    // fn purchase_stindem(
+    //     ref self: TContractState,
+    //     buyer_address: ContractAddress,
+    //     quantity: u256,
+    // ) -> u256;
+
+    // fn update_stindem_purchase_detail(
+    //     ref self: TContractState,
+    //     transaction_id: u256,
+    //     txn_hash: ByteArray,
+    //     payment_status_code: u8
+    // );
+
+    // fn get_stindem_purchase_detail(
+    //     self: @TContractState,
+    //     transaction_id: u256
+    // ) -> NativeTokenPurchaseReponse;
+
+    // fn recover_stindem_from_market(
+    //     ref self: TContractState,
+    //     seller_address: ContractAddress,
+    //     quantity: u256,
+    // ) -> u256;
+
+    // fn update_stindem_recovery_from_market(
+    //     ref self: TContractState,
+    //     transaction_id: u256,
+    //     txn_hash: ByteArray,
+    //     payment_status_code: u8
+    // );
+
+    // fn get_stindem_recovery_txn_detail(
+    //     self: @TContractState,
+    //     transaction_id: u256
+    // ) -> NativeTokenRecoveryResponse;
+
+    // fn purchase_voting_commitment(
+    //     ref self: TContractState,
+    //     seller_address: ContractAddress,
+    //     quantity: u256,
+    // );
+
+    // fn update_voting_commitment_purchase(
+    //     ref self: TContractState,
+    //     transaction_id: u256,
+    //     txn_hash: ByteArray,
+    //     payment_status_code: u8
+    // );
+
+    // fn get_voting_commitment_purchase_detail(
+    //     self: @TContractState,
+    //     transaction_id: u256
+    // ) -> PurchaseVotingCommitmentResponse;
+
+    // fn initiate_reinsurance_premium_payment(
+    //     ref self: TContractState,
+    //     insured_proposal_id: u256,
+    //     insured_policy_id: u256,
+    //     reinsurer_id: u256,
+    //     reinsurance_payment_address: ContractAddress,
+    //     percentage_reinsurance: u16,
+    //     gross_sum_insured: u256,
+    //     ceded_sum_insured: u256,
+    //     gross_premium: u256,
+    //     ceded_premium: u256,
+    // ) -> u256;
+
+    // fn update_reinsurance_premium_payment_detail(
+    //     ref self: TContractState,
+    //     transaction_id: u256,
+    //     txn_hash: ByteArray,
+    //     reinsurance_doc_url: ByteArray,
+    //     payment_status_code: u8,
+    //     reinsurance_status_code: u8
+    // );
+
+    // fn get_reinsurance_premium_payment_detail(
+    //     self: @TContractState,
+    //     transaction_id: u256
+    // ) -> CreditReinsuranceResponse;
+
+    // fn initiate_claim_recovery_from_reinsurance(
+    //     ref self: TContractState,
+    //     reinsurance_payment_id: u256,
+    //     insured_proposal_id: u256,
+    //     insured_policy_id: u256,
+    //     claim_id: u256,
+    //     insured: ContractAddress,
+    //     reinsurer_id: u256,
+    //     reinsurance_payment_address: ContractAddress,
+    //     gross_claim_amount: u256,
+    // ) -> u256;
+
+    // fn update_claim_recovery_from_reinsurance(
+    //     ref self: TContractState,
+    //     transaction_id: u256,
+    //     claim_id: u256,
+    //     reinsurance_payment_id: u256,
+    //     reinsurance_payment_address: ContractAddress,
+    //     txn_hash: ByteArray,
+    //     claim_discharge_voucher_url: ByteArray,
+    //     settlement_status_code: u8,
+    //     reinsurance_status_code: u8 
+    // );
+
+    // fn get_claim_recovery_from_reinsurance_detail(
+    //     self: @TContractState,
+    //     transaction_id: u256
+    // ) -> DebitReinsuranceResponse;
+
+    // fn create_new_reinsurer(
+    //     ref self: TContractState,
+    //     reinsurer_name: ByteArray,
+    //     reinsurer_head_office: ByteArray,
+    //     reinsurer_fiat_account: ByteArray,
+    //     reinsurer_web_site: ByteArray,
+    //     risk_capacity: u256,
+    //     contract_type_code: u8,
+    // ) -> u256;
+
+    // fn update_reinsruer_detail(
+    //     ref self: TContractState,
+    //     reinsurer_id: u256,
+    //     reinsurer_name: ByteArray,
+    //     reinsurer_head_office: ByteArray,
+    //     reinsurer_fiat_account: ByteArray,
+    //     reinsurer_web_site: ByteArray,
+    //     risk_capacity: u256,
+    //     contract_type_code: u8,
+    //     total_obligation_offered: u256,
+    //     total_obligation_fulfilled: u256,
+    //     reliability_factor: u8,
+    // );
+
+    // fn get_reinsurer_by_id(
+    //     self: @TContractState,
+    //     reinsurer_id: u256
+    // ) -> ReinsurerResponse;
+
+    // fn set_proposal_form_address(
+    //     ref self: TContractState,
+    //     proposal_form_address: ContractAddress
+    // );
+
+    // fn get_proposal_form_address(
+    //     self: @TContractState,
+    // ) -> ContractAddress;
+
+    // fn set_policy_minting_address(
+    //     ref self: TContractState,
+    //     policy_minting_address: ContractAddress
+    // );
+
+    // fn get_policy_minting_address(
+    //     self: @TContractState,
+    // ) -> ContractAddress;
+
+    // fn set_governance_address(
+    //     ref self: TContractState,
+    //     governance_address: ContractAddress
+    // );
+
+    // fn get_governance_address(
+    //     self: @TContractState,
+    // ) -> ContractAddress;
+
+    // fn set_claims_contract_address(
+    //     ref self: TContractState,
+    //     claims_contract_address: ContractAddress
+    // );
+
+    // fn get_claims_contract_address(
+    //     self: @TContractState,
+    // ) -> ContractAddress;
+
+}
+
+

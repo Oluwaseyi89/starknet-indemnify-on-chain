@@ -1,16 +1,27 @@
 #[starknet::contract]
 pub mod TreasuryManagement {
     // use crate::contracts::erc721_policy::PolicyNFT::Event;
+use crate::interfaces::interfaces::IPolicyNFTDispatcher;
+use crate::interfaces::interfaces::IProposalFormDispatcher;
+use crate::structs::structs::ClaimPayment;
 use starknet::{ ContractAddress, ClassHash };
-    use starknet::get_caller_address;
-    use starknet::get_contract_address;
+    use starknet::{
+        get_caller_address,
+        get_contract_address,
+        get_block_timestamp,
+        get_tx_info,
+        TxInfo
+    };
     // use core::integer::zeroable::Zeroable;
     use openzeppelin_access::accesscontrol::AccessControlComponent;
     use openzeppelin::security::pausable::PausableComponent;
     use openzeppelin::security::reentrancyguard::ReentrancyGuardComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use openzeppelin::token::erc20::interface::IERC20Dispatcher;
-    use openzeppelin::token::erc721::interface::IERC721Dispatcher;
+    use openzeppelin::token::erc20::interface::{ 
+        IERC20Dispatcher,
+        IERC20DispatcherTrait
+    };
+    // use openzeppelin::token::erc721::interface::IERC721Dispatcher;
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
 
@@ -18,11 +29,17 @@ use starknet::{ ContractAddress, ClassHash };
 
     use starknet::storage::{
         Map,
-        StorageMapReadAccess,
+        // StorageMapReadAccess,
         StorageMapWriteAccess,
         StoragePointerReadAccess,
         StoragePointerWriteAccess
     };
+
+    use crate::structs::structs::*;
+    use crate::enums::enums::*;
+    use crate::event_structs::event_structs::*;
+    use crate::utils::utils::*;
+    use crate::interfaces::interfaces::*;
 
 
 
@@ -78,25 +95,60 @@ use starknet::{ ContractAddress, ClassHash };
         #[substorage(v0)]
         src5: SRC5Component::Storage,
 
-        // Treasury Storage
-        withdrawal_proposals: Map<u256, WithdrawalProposal>,
-        //premium per owner per policy_id
-        premiums: Map<(ContractAddress, u256), u256>,
-        //investment fund per investor per investment_id
-        investors_fund: Map<(ContractAddress, u256), u256>,
+
+        next_transaction_id: u256,
+        next_reinsurer_id: u256,
+
+        reinsurers: Map<u256, Reinsurer>,
+
+        //premium payment data by transaction_id
+        premiums: Map<u256, PremiumPayment>,
+        //By transaction_id
+        claim_payments: Map<u256, ClaimPayment>,
+        //By transaction_id --- Debits Starknet-Indemnify STINDEM Balance
+        native_token_purchases: Map<u256, NativeTokenPurchase>,
+        //By transaction_id --- Credits Starknet-Indeminfy STINDEM Balance
+        native_token_recoveries: Map<u256, NativeTokenRecovery>,
+        //By transaction_id --- Credits Starknet-Indemnify STINDEM Balance
+        vote_right_payments: Map<u256, PurchaseVotingCommitment>,
+        //Current balance of Investors' fund
+        investors_fund_balance: u256,
         gross_premium_written: u256,
         claims_reserve: u256,
-        total_equity_fund: u256,
-        proposal_nonce: u256,
-        asset_balances: Map<(ContractAddress, ContractAddress), u256>, // (asset, token) -> balance
-        whitelist: Map<ContractAddress, bool>,
-        role_limits: Map<(felt252, ContractAddress), u256>, // (role, asset) -> limit
-        timelock_duration: u64,
-        proposal_approvals: Map<(u256, ContractAddress), bool> // (proposal_id, approver) -> has_approved
+        total_premium_allocated_to_reinsurance: u256,
+        total_premium_allocated_to_investors_pool: u256,
+        total_claims_value_drawn_from_investors_pool: u256,
+        total_claims_value_drawn_from_reinsurance: u256,
+        total_value_of_claims_paid: u256,
+        total_value_of_incurred_claims: u256,
+        total_value_of_repudiated_claims: u256,
+    
+        //STINDEM token address
+        stindem_token_address: ContractAddress, 
+
+        //Conversion rates
+        current_stindem_to_strk_value: u256,
+        current_stindem_to_eth_value: u256,
+        current_stindem_to_btc_value: u256,
+        current_stindem_to_usd_value: u256,  
+        current_strk_to_usd_value: u256,
+        current_strk_to_eth_value: u256,
+        current_strk_to_btc_value: u256,
+
+        //Currencies balances
+        starknet_indemnify_usd_balance: u256,
+        starknet_indemnify_strk_balance: u256,
+        starknet_indemnify_stindem_balance: u256,
+        starknet_indemnify_eth_balance: u256,
+        starknet_indemnify_btc_balance: u256,
+
+        proposal_form_address: ContractAddress,
+        policy_minting_address: ContractAddress,
+        claims_contract_address: ContractAddress,
+        governance_contract_address: ContractAddress,
+        strk_contract_address: ContractAddress,
+        starknet_indemnify_treasury_account: ContractAddress
     }
-
-
-  
 
 
     #[event]
@@ -111,90 +163,13 @@ use starknet::{ ContractAddress, ClassHash };
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
         #[flat]
-        SRC5Event: SRC5Component::Event,
-        
-        Deposit: Deposit,
-        WithdrawalProposed: WithdrawalProposed,
-        WithdrawalApproved: WithdrawalApproved,
-        WithdrawalExecuted: WithdrawalExecuted,
-        WithdrawalRejected: WithdrawalRejected,
-        WhitelistUpdated: WhitelistUpdated,
-        LimitsUpdated: LimitsUpdated
+        SRC5Event: SRC5Component::Event
     }
     
 
-    #[derive(Drop, starknet::Event)]
-    struct WithdrawalProposal {
-        recipient: ContractAddress,
-        amount: u256,
-        asset: ContractAddress, // token address (0 for ETH/STRK)
-        timestamp: u64,
-        status: felt252,
-        approvals: u8,
-        required_approvals: u8,
-        timelock_until: u64
-    }
+  
 
    
-    #[derive(Drop, starknet::Event)]
-    struct Deposit {
-        #[key]
-        depositor: ContractAddress,
-        asset: ContractAddress,
-        amount: u256
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct WithdrawalProposed {
-        #[key]
-        proposal_id: u256,
-        proposer: ContractAddress,
-        recipient: ContractAddress,
-        asset: ContractAddress,
-        amount: u256,
-        required_approvals: u8
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct WithdrawalApproved {
-        #[key]
-        proposal_id: u256,
-        approver: ContractAddress,
-        role: felt252,
-        current_approvals: u8
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct WithdrawalExecuted {
-        #[key]
-        proposal_id: u256,
-        executor: ContractAddress,
-        recipient: ContractAddress,
-        asset: ContractAddress,
-        amount: u256
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct WithdrawalRejected {
-        #[key]
-        proposal_id: u256,
-        rejector: ContractAddress
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct WhitelistUpdated {
-        #[key]
-        address: ContractAddress,
-        whitelisted: bool
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct LimitsUpdated {
-        #[key]
-        role: felt252,
-        asset: ContractAddress,
-        new_limit: u256
-    }
 
    
   
@@ -213,310 +188,388 @@ use starknet::{ ContractAddress, ClassHash };
         self.accesscontrol._grant_role(TREASURY_MANAGER_ROLE, manager);
         self.accesscontrol._grant_role(TREASURY_GUARDIAN_ROLE, guardian);
 
+        self.next_transaction_id.write(1);
+        self.next_reinsurer_id.write(1);
+
         // Set timelock duration
-        self.timelock_duration.write(timelock_duration);
     }
 
-    // ========== ASSET MANAGEMENT ==========
+    
+        #[abi(embed_v0)]
+    pub impl TreasuryManagementImpl of ITreasuryManagement<ContractState> {
 
-    // #[external(v0)]
-    // fn deposit(
-    //     ref self: ContractState, 
-    //     asset: ContractAddress, 
-    //     amount: Uint256
-    // ) {
-    //     let caller = get_caller_address();
+        fn pay_premium(
+            ref self: ContractState,
+            proposal_id: u256,
+            payer_address: ContractAddress,
+        ) -> u256 {
+
+            let current_txn_id: u256 = self.next_transaction_id.read();
+
+            let proposal_form_dispatcher: IProposalFormDispatcher = IProposalFormDispatcher {
+                contract_address: self.proposal_form_address.read()
+            };
+
+            let proposal_obj: ProposalFormResponse = proposal_form_dispatcher.get_proposal_by_id(proposal_id);
+
+            let is_risk_analytics_approved: bool = proposal_obj.risk_analytics_approved;
+            let is_governance_approved: bool = proposal_obj.governance_approved;
+
+            let is_premium_payment_allowed: bool = is_proposal_approved_for_premium_payment(
+                is_risk_analytics_approved, 
+                is_governance_approved
+            );
+
+            assert!(is_premium_payment_allowed, "Unathorized: Proposal form has not been approved for premium payment");           
+
+            let actual_premium_payable: u256 = proposal_obj.premium_payable;
+
+            let treasury_account: ContractAddress = self.starknet_indemnify_treasury_account.read();
+
+            let strk_dispatcher: IERC20Dispatcher = IERC20Dispatcher {
+                contract_address: self.strk_contract_address.read()
+            }; 
+
+            let caller: ContractAddress = get_caller_address();
+
+            let balance: u256 = strk_dispatcher.balance_of(caller);
+
+            assert!(balance >= actual_premium_payable, "Caller doesn't have enough balance");
+
+            let contract: ContractAddress = get_contract_address();
+
+            let allowance: u256 = strk_dispatcher.allowance(caller, contract);
+
+            assert!(allowance >= actual_premium_payable, "Contract is not allowed to spend enough premium");
+
+
+            let success: bool = strk_dispatcher.transfer_from(caller, treasury_account, actual_premium_payable);
+
+            assert!(success, "Premium payment failed");
+
+
+            let policy_minting_dispatcher: IPolicyNFTDispatcher = IPolicyNFTDispatcher {
+                contract_address: self.policy_minting_address.read()
+            };
+
+            let new_policy_id: u256 = policy_minting_dispatcher.mint_policy(proposal_id); 
+
+            let current_time: u64 = get_block_timestamp();   
+
+            let txn_info: TxInfo = get_tx_info().unbox();
+
+            let txn_hash: felt252 = txn_info.transaction_hash;
+
+
+
+            let new_payment: PremiumPayment = PremiumPayment {
+                transaction_id: current_txn_id,
+                proposal_id: proposal_id,
+                policy_id: new_policy_id,
+                payer_address: payer_address,
+                policyholder: proposal_obj.proposer,
+                amount_paid: actual_premium_payable,
+                sum_insured: proposal_obj.sum_insured,
+                payment_date: current_time,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                payment_status_code:  convert_payment_status_to_code(PaymentStatus::Successful)
+            };
+
+            self.premiums.write(current_txn_id, new_payment);
+
+            let incremented_txn_id: u256 = current_txn_id + 1;
+
+            self.next_transaction_id.write(incremented_txn_id);
+
+             current_txn_id
+        }
+    
+        // fn update_premium_payment(
+        //     ref self: ContractState,
+        //     transaction_id: u256,
+        //     policy_id: u256,
+        //     txn_hash: ByteArray,
+        //     payment_status_code: u8 
+        // ) {
+
+        // }
+    
+        // fn get_premium_payment(
+        //     self: @ContractState,
+        //     transaction_id: u256
+        // ) -> PremiumPaymentResponse {
+
+        // }
+    
+        // fn pay_claim(
+        //     ref self: ContractState,
+        //     policy_id: u256,
+        //     claim_id: u256,
+        //     policyholder: ContractAddress,
+        //     third_party_account: ContractAddress,
+        // ) -> u256 {
+
+        // }
+    
+        // fn update_claim_payment(
+        //     ref self: ContractState,
+        //     transaction_id: u256,
+        //     third_party_account: ContractAddress,
+        //     txn_hash: ByteArray,
+        //     settlement_status_code: u8,
+        //     settlement_source_code: u8
+        // ) {
+
+        // }
+    
+        // fn get_claim_payment(
+        //     self: @ContractState,
+        //     transaction_id: u256
+        // ) -> ClaimPaymentResponse {
+
+        // }
+    
+        // fn purchase_stindem(
+        //     ref self: ContractState,
+        //     buyer_address: ContractAddress,
+        //     quantity: u256,
+        // ) -> u256 {
+
+        // }
+    
+        // fn update_stindem_purchase_detail(
+        //     ref self: ContractState,
+        //     transaction_id: u256,
+        //     txn_hash: ByteArray,
+        //     payment_status_code: u8
+        // ) {
+
+        // }
+    
+        // fn get_stindem_purchase_detail(
+        //     self: @ContractState,
+        //     transaction_id: u256
+        // ) -> NativeTokenPurchaseReponse {
+
+        // }
+    
+        // fn recover_stindem_from_market(
+        //     ref self: ContractState,
+        //     seller_address: ContractAddress,
+        //     quantity: u256,
+        // ) -> u256 {
+
+        // }
+    
+        // fn update_stindem_recovery_from_market(
+        //     ref self: ContractState,
+        //     transaction_id: u256,
+        //     txn_hash: ByteArray,
+        //     payment_status_code: u8
+        // ) {
+
+        // }
+    
+        // fn get_stindem_recovery_txn_detail(
+        //     self: @ContractState,
+        //     transaction_id: u256
+        // ) -> NativeTokenRecoveryResponse {
+
+        // }
+    
+        // fn purchase_voting_commitment(
+        //     ref self: ContractState,
+        //     seller_address: ContractAddress,
+        //     quantity: u256,
+        // ) {
+
+        // }
+    
+        // fn update_voting_commitment_purchase(
+        //     ref self: ContractState,
+        //     transaction_id: u256,
+        //     txn_hash: ByteArray,
+        //     payment_status_code: u8
+        // ) {
+
+        // }
+    
+        // fn get_voting_commitment_purchase_detail(
+        //     self: @ContractState,
+        //     transaction_id: u256
+        // ) -> PurchaseVotingCommitmentResponse {
+
+        // }
+    
+        // fn initiate_reinsurance_premium_payment(
+        //     ref self: ContractState,
+        //     insured_proposal_id: u256,
+        //     insured_policy_id: u256,
+        //     reinsurer_id: u256,
+        //     reinsurance_payment_address: ContractAddress,
+        //     percentage_reinsurance: u16,
+        //     gross_sum_insured: u256,
+        //     ceded_sum_insured: u256,
+        //     gross_premium: u256,
+        //     ceded_premium: u256,
+        // ) -> u256 {
+
+        // }
+    
+        // fn update_reinsurance_premium_payment_detail(
+        //     ref self: ContractState,
+        //     transaction_id: u256,
+        //     txn_hash: ByteArray,
+        //     reinsurance_doc_url: ByteArray,
+        //     payment_status_code: u8,
+        //     reinsurance_status_code: u8
+        // ) {
+
+        // }
+    
+        // fn get_reinsurance_premium_payment_detail(
+        //     self: @ContractState,
+        //     transaction_id: u256
+        // ) -> CreditReinsuranceResponse {
+
+        // }
+    
+        // fn initiate_claim_recovery_from_reinsurance(
+        //     ref self: ContractState,
+        //     reinsurance_payment_id: u256,
+        //     insured_proposal_id: u256,
+        //     insured_policy_id: u256,
+        //     claim_id: u256,
+        //     insured: ContractAddress,
+        //     reinsurer_id: u256,
+        //     reinsurance_payment_address: ContractAddress,
+        //     gross_claim_amount: u256,
+        // ) -> u256 {
+
+        // }
+    
+        // fn update_claim_recovery_from_reinsurance(
+        //     ref self: ContractState,
+        //     transaction_id: u256,
+        //     claim_id: u256,
+        //     reinsurance_payment_id: u256,
+        //     reinsurance_payment_address: ContractAddress,
+        //     txn_hash: ByteArray,
+        //     claim_discharge_voucher_url: ByteArray,
+        //     settlement_status_code: u8,
+        //     reinsurance_status_code: u8 
+        // ) {
+
+        // }
+    
+        // fn get_claim_recovery_from_reinsurance_detail(
+        //     self: @ContractState,
+        //     transaction_id: u256
+        // ) -> DebitReinsuranceResponse {
+
+        // }
+    
+        // fn create_new_reinsurer(
+        //     ref self: ContractState,
+        //     reinsurer_name: ByteArray,
+        //     reinsurer_head_office: ByteArray,
+        //     reinsurer_fiat_account: ByteArray,
+        //     reinsurer_web_site: ByteArray,
+        //     risk_capacity: u256,
+        //     contract_type_code: u8,
+        // ) -> u256 {
+
+        // }
+    
+        // fn update_reinsruer_detail(
+        //     ref self: ContractState,
+        //     reinsurer_id: u256,
+        //     reinsurer_name: ByteArray,
+        //     reinsurer_head_office: ByteArray,
+        //     reinsurer_fiat_account: ByteArray,
+        //     reinsurer_web_site: ByteArray,
+        //     risk_capacity: u256,
+        //     contract_type_code: u8,
+        //     total_obligation_offered: u256,
+        //     total_obligation_fulfilled: u256,
+        //     reliability_factor: u8,
+        // ) {
+
+        // }
+    
+        // fn get_reinsurer_by_id(
+        //     self: @ContractState,
+        //     reinsurer_id: u256
+        // ) -> ReinsurerResponse {
+
+        // }
+    
+        // fn set_proposal_form_address(
+        //     ref self: ContractState,
+        //     proposal_form_address: ContractAddress
+        // ) {
+
+        // }
+    
+        // fn get_proposal_form_address(
+        //     self: @ContractState,
+        // ) -> ContractAddress {
+
+        // }
+    
+        // fn set_policy_minting_address(
+        //     ref self: ContractState,
+        //     policy_minting_address: ContractAddress
+        // ) {
+
+        // }
+    
+        // fn get_policy_minting_address(
+        //     self: @ContractState,
+        // ) -> ContractAddress {
+
+        // }
+    
+        // fn set_governance_address(
+        //     ref self: ContractState,
+        //     governance_address: ContractAddress
+        // ) {
+
+        // }
+    
+        // fn get_governance_address(
+        //     self: @ContractState,
+        // ) -> ContractAddress {
+
+        // }
+    
+        // fn set_claims_contract_address(
+        //     ref self: ContractState,
+        //     claims_contract_address: ContractAddress
+        // ) {
+
+        // }
+    
+        // fn get_claims_contract_address(
+        //     self: @ContractState,
+        // ) -> ContractAddress {
+
+        // }
+    
+    }
+
+    fn is_proposal_approved_for_premium_payment(is_risk_analytics_approved: bool, is_governance_approved: bool) -> bool {
         
-    //     if asset.is_zero() {
-    //         // ETH/STRK deposit - value should be sent with call
-    //         // Balance tracking happens automatically
-    //         self.emit(Deposit { depositor: caller, asset: asset, amount: amount });
-    //         return ();
-    //     }
+        if is_risk_analytics_approved {
+            return true;
+        } else if is_governance_approved {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
-    //     // ERC20 token deposit
-    //     let token = IERC20Dispatcher { contract_address: asset };
-    //     let current_allowance = token.allowance(caller, get_contract_address());
-    //     assert(current_allowance >= amount, 'Insufficient allowance');
-
-    //     token.transfer_from(caller, get_contract_address(), amount);
-        
-    //     // Update balance
-    //     let current_balance = self.asset_balances.read((asset, caller));
-    //     self.asset_balances.write((asset, caller), current_balance + amount);
-
-    //     self.emit(Deposit { depositor: caller, asset: asset, amount: amount });
-    // }
-
-    // #[external(v0)]
-    // fn deposit_eth(ref self: ContractState) {
-    //     let caller = get_caller_address();
-    //     // ETH balance is tracked automatically by the protocol
-    //     self.emit(Deposit { 
-    //         depositor: caller, 
-    //         asset: ContractAddress::default(), 
-    //         amount: Uint256 { low: 0, high: 0 } // Actual amount handled by protocol
-    //     });
-    // }
-
-    // // ========== WITHDRAWAL PROPOSAL SYSTEM ==========
-
-    // #[external(v0)]
-    // #[access_control(role: "TREASURY_MANAGER")]
-    // fn propose_withdrawal(
-    //     ref self: ContractState,
-    //     recipient: ContractAddress,
-    //     amount: Uint256,
-    //     asset: ContractAddress,
-    //     required_approvals: u8
-    // ) -> u256 {
-    //     self.pausable.assert_not_paused();
-    //     assert(required_approvals > 0, 'Required approvals must be > 0');
-    //     assert(self.whitelist.read(recipient), 'Recipient not whitelisted');
-
-    //     // Check treasury balance
-    //     let treasury_balance = self.get_asset_balance(asset);
-    //     assert(treasury_balance >= amount, 'Insufficient treasury balance');
-
-    //     let proposal_id = self.proposal_nonce.read();
-    //     let timestamp = get_block_timestamp();
-    //     let timelock_until = timestamp + self.timelock_duration.read();
-
-    //     let proposal = WithdrawalProposal {
-    //         recipient: recipient,
-    //         amount: amount,
-    //         asset: asset,
-    //         timestamp: timestamp,
-    //         status: STATUS_PENDING,
-    //         approvals: 0,
-    //         required_approvals: required_approvals,
-    //         timelock_until: timelock_until
-    //     };
-
-    //     self.withdrawal_proposals.write(proposal_id, proposal);
-    //     self.proposal_nonce.write(proposal_id + 1);
-
-    //     self.emit(WithdrawalProposed {
-    //         proposal_id: proposal_id,
-    //         proposer: get_caller_address(),
-    //         recipient: recipient,
-    //         asset: asset,
-    //         amount: amount,
-    //         required_approvals: required_approvals
-    //     });
-
-    //     proposal_id
-    // }
-
-    // #[external(v0)]
-    // #[access_control(role: "TREASURY_GUARDIAN")]
-    // fn approve_withdrawal(ref self: ContractState, proposal_id: u256) {
-    //     self.pausable.assert_not_paused();
-        
-    //     let mut proposal = self.withdrawal_proposals.read(proposal_id);
-    //     assert(proposal.status == STATUS_PENDING, 'Proposal not pending');
-        
-    //     let approver = get_caller_address();
-    //     assert(!self.proposal_approvals.read((proposal_id, approver)), 'Already approved');
-
-    //     // Check if approver has sufficient privileges based on amount
-    //     let approver_role = self.get_approver_role(approver);
-    //     let limit = self.role_limits.read((approver_role, proposal.asset));
-        
-    //     if !limit.is_zero() {
-    //         assert(proposal.amount <= limit, 'Amount exceeds approval limit for role');
-    //     }
-
-    //     proposal.approvals += 1;
-    //     self.proposal_approvals.write((proposal_id, approver), true);
-
-    //     if proposal.approvals >= proposal.required_approvals {
-    //         proposal.status = STATUS_APPROVED;
-    //     }
-
-    //     self.withdrawal_proposals.write(proposal_id, proposal);
-
-    //     self.emit(WithdrawalApproved {
-    //         proposal_id: proposal_id,
-    //         approver: approver,
-    //         role: self.get_approver_role(approver),
-    //         current_approvals: proposal.approvals
-    //     });
-    // }
-
-    // #[external(v0)]
-    // fn execute_withdrawal(ref self: ContractState, proposal_id: u256) {
-    //     self.pausable.assert_not_paused();
-    //     self.reentrancy_guard._non_reentrant(());
-        
-    //     let proposal = self.withdrawal_proposals.read(proposal_id);
-    //     assert(proposal.status == STATUS_APPROVED, 'Proposal not approved');
-    //     assert(get_block_timestamp() >= proposal.timelock_until, 'Timelock not expired');
-
-    //     // Check balance again before execution
-    //     let treasury_balance = self.get_asset_balance(proposal.asset);
-    //     assert(treasury_balance >= proposal.amount, 'Insufficient treasury balance');
-
-    //     // Execute transfer
-    //     self._transfer_assets(proposal.asset, proposal.recipient, proposal.amount);
-
-    //     // Update proposal status
-    //     let mut updated_proposal = proposal;
-    //     updated_proposal.status = STATUS_EXECUTED;
-    //     self.withdrawal_proposals.write(proposal_id, updated_proposal);
-
-    //     // Update treasury balance
-    //     self._update_balance(proposal.asset, proposal.amount, false);
-
-    //     self.emit(WithdrawalExecuted {
-    //         proposal_id: proposal_id,
-    //         executor: get_caller_address(),
-    //         recipient: proposal.recipient,
-    //         asset: proposal.asset,
-    //         amount: proposal.amount
-    //     });
-    // }
-
-    // #[external(v0)]
-    // #[access_control(role: "TREASURY_GUARDIAN")]
-    // fn reject_withdrawal(ref self: ContractState, proposal_id: u256) {
-    //     let mut proposal = self.withdrawal_proposals.read(proposal_id);
-    //     assert(proposal.status == STATUS_PENDING, 'Proposal not pending');
-
-    //     proposal.status = STATUS_REJECTED;
-    //     self.withdrawal_proposals.write(proposal_id, proposal);
-
-    //     self.emit(WithdrawalRejected {
-    //         proposal_id: proposal_id,
-    //         rejector: get_caller_address()
-    //     });
-    // }
-
-    // // ========== ADMIN FUNCTIONS ==========
-
-    // #[external(v0)]
-    // #[access_control(role: "DEFAULT_ADMIN_ROLE")]
-    // fn set_withdrawal_limit(
-    //     ref self: ContractState,
-    //     role: felt252,
-    //     asset: ContractAddress,
-    //     limit: Uint256
-    // ) {
-    //     self.role_limits.write((role, asset), limit);
-    //     self.emit(LimitsUpdated { role: role, asset: asset, new_limit: limit });
-    // }
-
-    // #[external(v0)]
-    // #[access_control(role: "DEFAULT_ADMIN_ROLE")]
-    // fn update_whitelist(
-    //     ref self: ContractState,
-    //     address: ContractAddress,
-    //     whitelisted: bool
-    // ) {
-    //     self.whitelist.write(address, whitelisted);
-    //     self.emit(WhitelistUpdated { address: address, whitelisted: whitelisted });
-    // }
-
-    // #[external(v0)]
-    // #[access_control(role: "DEFAULT_ADMIN_ROLE")]
-    // fn set_timelock_duration(ref self: ContractState, duration: u64) {
-    //     self.timelock_duration.write(duration);
-    // }
-
-    // #[external(v0)]
-    // #[access_control(role: "DEFAULT_ADMIN_ROLE")]
-    // fn pause_treasury(ref self: ContractState) {
-    //     self.pausable._pause();
-    // }
-
-    // #[external(v0)]
-    // #[access_control(role: "DEFAULT_ADMIN_ROLE")]
-    // fn unpause_treasury(ref self: ContractState) {
-    //     self.pausable._unpause();
-    // }
-
-    // // ========== VIEW FUNCTIONS ==========
-
-    // #[view]
-    // fn get_asset_balance(self: @ContractState, asset: ContractAddress) -> Uint256 {
-    //     if asset.is_zero() {
-    //         // Return ETH balance (pseudo-code - actual implementation may vary)
-    //         return Uint256 { low: 0, high: 0 }; // Placeholder
-    //     }
-    //     let token = IERC20Dispatcher { contract_address: asset };
-    //     token.balance_of(get_contract_address())
-    // }
-
-    // #[view]
-    // fn get_proposal(self: @ContractState, proposal_id: u256) -> WithdrawalProposal {
-    //     self.withdrawal_proposals.read(proposal_id)
-    // }
-
-    // #[view]
-    // fn is_whitelisted(self: @ContractState, address: ContractAddress) -> bool {
-    //     self.whitelist.read(address)
-    // }
-
-    // #[view]
-    // fn get_withdrawal_limit(
-    //     self: @ContractState, 
-    //     role: felt252, 
-    //     asset: ContractAddress
-    // ) -> Uint256 {
-    //     self.role_limits.read((role, asset))
-    // }
-
-    // // ========== INTERNAL FUNCTIONS ==========
-
-    // fn _transfer_assets(
-    //     ref self: ContractState,
-    //     asset: ContractAddress,
-    //     recipient: ContractAddress,
-    //     amount: Uint256
-    // ) {
-    //     if asset.is_zero() {
-    //         // Transfer ETH/STRK
-    //         let _ = starknet::call_contract_syscall(
-    //             recipient, 
-    //             selector: 'transfer', 
-    //             calldata: array![amount.low, amount.high]
-    //         );
-    //     } else {
-    //         // Transfer ERC20 tokens
-    //         let token = IERC20Dispatcher { contract_address: asset };
-    //         token.transfer(recipient, amount);
-    //     }
-    // }
-
-    // fn _update_balance(
-    //     ref self: ContractState,
-    //     asset: ContractAddress,
-    //     amount: Uint256,
-    //     is_deposit: bool
-    // ) {
-    //     if !asset.is_zero() {
-    //         let current_balance = self.asset_balances.read((asset, get_contract_address()));
-    //         let new_balance = if is_deposit {
-    //             current_balance + amount
-    //         } else {
-    //             current_balance - amount
-    //         };
-    //         self.asset_balances.write((asset, get_contract_address()), new_balance);
-    //     }
-    // }
-
-    // fn get_approver_role(self: @ContractState, approver: ContractAddress) -> felt252 {
-    //     if self.access.has_role(TREASURY_GUARDIAN_ROLE, approver) {
-    //         return TREASURY_GUARDIAN_ROLE;
-    //     }
-    //     if self.access.has_role(TREASURY_MANAGER_ROLE, approver) {
-    //         return TREASURY_MANAGER_ROLE;
-    //     }
-    //     if self.access.has_role(DEFAULT_ADMIN_ROLE, approver) {
-    //         return DEFAULT_ADMIN_ROLE;
-    //     }
-    //     'UNAUTHORIZED'
-    // }
 
 
     #[abi(embed_v0)]
