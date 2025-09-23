@@ -63,7 +63,9 @@ pub trait IProposalForm<TContractState> {
         premium_rate: u16,
         risk_score: u256,
         proposal_status_code: u8,
-        rejection_reason_code: u8
+        rejection_reason_code: u8,
+        has_reinsurance: bool,
+        reinsurance_txn_id: u256,
     );
 
     fn assess_proposal_by_governance(
@@ -75,13 +77,10 @@ pub trait IProposalForm<TContractState> {
         premium_rate: u16,
         risk_score: u256,
         proposal_status_code: u8,
-        rejection_reason_code: u8
+        rejection_reason_code: u8,
+        has_reinsurance: bool,
+        reinsurance_txn_id: u256,
     );
-
-    fn pay_premium_on_approval(
-        ref self: TContractState,
-        proposal_id: u256,
-    ) -> bool;
     
     fn set_treasury_address(
         ref self: TContractState,
@@ -190,7 +189,8 @@ pub trait IClaim<TContractState> {
         is_repudiated: bool,
         repudiation_reason_code: u8,
         claim_status_code: u8,
-        claim_type_code: u8
+        claim_type_code: u8,
+        approved_settlement_amount: u256,        
     );
 
     fn assess_claim_by_governance(
@@ -201,7 +201,8 @@ pub trait IClaim<TContractState> {
         is_repudiated: bool,
         repudiation_reason_code: u8,
         claim_status_code: u8,
-        claim_type_code: u8
+        claim_type_code: u8,
+        approved_settlement_amount: u256,
     );
 
     fn set_claim_as_settled(
@@ -312,26 +313,27 @@ pub trait ITreasuryManagement<TContractState> {
         payer_address: ContractAddress,
     ) -> u256;
 
-    // fn update_premium_payment(
-    //     ref self: TContractState,
-    //     transaction_id: u256,
-    //     policy_id: u256,
-    //     txn_hash: ByteArray,
-    //     payment_status_code: u8 
-    // );
+    fn update_premium_payment(
+        ref self: TContractState,
+        transaction_id: u256,
+        policy_id: u256,
+        txn_hash: felt252,
+        payment_status_code: u8 
+    );
 
-    // fn get_premium_payment(
-    //     self: @TContractState,
-    //     transaction_id: u256
-    // ) -> PremiumPaymentResponse;
+    fn get_premium_payment(
+        self: @TContractState,
+        transaction_id: u256
+    ) -> PremiumPaymentResponse;
 
-    // fn pay_claim(
-    //     ref self: TContractState,
-    //     policy_id: u256,
-    //     claim_id: u256,
-    //     policyholder: ContractAddress,
-    //     third_party_account: ContractAddress,
-    // ) -> u256;
+    fn pay_claim(
+        ref self: TContractState,
+        policy_id: u256,
+        claim_id: u256,
+        policyholder: ContractAddress,
+        third_party_account: ContractAddress,
+        settlement_source_code: u8
+    ) -> u256;
 
     // fn update_claim_payment(
     //     ref self: TContractState,

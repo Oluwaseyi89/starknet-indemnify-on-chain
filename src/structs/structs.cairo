@@ -23,7 +23,9 @@ use crate::enums::enums::*;
         pub proposal_status_code: u8,
         pub rejection_reason_code: u8,
         pub risk_score: u256,
-        pub premium_rate: u16
+        pub premium_rate: u16,
+        pub has_reinsurance: bool,
+        pub reinsurance_txn_id: u256,
     }
 
 
@@ -52,7 +54,9 @@ use crate::enums::enums::*;
         pub proposal_status: ProposalStatus,
         pub rejection_reason: RejectionReason,
         pub risk_score: u256,
-        pub premium_rate: u16
+        pub premium_rate: u16,
+        pub has_reinsurance: bool,
+        pub reinsurance_txn_id: u256,
     }
 
 
@@ -75,6 +79,8 @@ use crate::enums::enums::*;
         pub is_expired: bool,
         pub claims_count: u256,
         pub has_claimed: bool,
+        pub has_reinsurance: bool,
+        pub reinsurance_txn_id: u256,
         pub aggregate_claim_amount: u256
     }
 
@@ -96,6 +102,8 @@ use crate::enums::enums::*;
         pub is_expired: bool,
         pub claims_count: u256,
         pub has_claimed: bool,
+        pub has_reinsurance: bool,
+        pub reinsurance_txn_id: u256,
         pub claim_ids: Array<u256>,
         pub aggregate_claim_amount: u256
     }
@@ -110,6 +118,7 @@ use crate::enums::enums::*;
         pub claimant: ContractAddress,
         pub claim_description: ByteArray,
         pub claim_amount: u256,
+        pub approved_settlement_amount: u256,
         pub alternative_account: ContractAddress,
         pub policy_class_code: u8,
         pub claim_status_code: u8,
@@ -136,6 +145,7 @@ use crate::enums::enums::*;
         pub claimant: ContractAddress,
         pub claim_description: ByteArray,
         pub claim_amount: u256,
+        pub approved_settlement_amount: u256,
         pub alternative_account: ContractAddress,
         pub policy_class: PolicyClass,
         pub claim_status: ClaimStatus,
@@ -236,6 +246,7 @@ use crate::enums::enums::*;
         pub policyholder: ContractAddress,
         pub third_party_account: ContractAddress,
         pub claim_amount: u256,
+        pub approved_settlement_amount: u256,
         pub settlement_date: u64,
         pub updated_at: u64,
         pub txn_hash: felt252,
@@ -253,6 +264,7 @@ use crate::enums::enums::*;
         pub policyholder: ContractAddress,
         pub third_party_account: ContractAddress,
         pub claim_amount: u256,
+        pub approved_settlement_amount: u256,
         pub settlement_date: u64,
         pub updated_at: u64,
         pub txn_hash: felt252,

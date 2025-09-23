@@ -167,7 +167,9 @@ use starknet::{ ContractAddress, ClassHash };
                 proposal_status_code: 1,
                 rejection_reason_code: 8,
                 risk_score: 0,
-                premium_rate: 0
+                premium_rate: 0,
+                has_reinsurance: false,
+                reinsurance_txn_id: 0,
             };
 
             self.proposals.write(current_proposal_id, new_proposal);
@@ -228,8 +230,9 @@ use starknet::{ ContractAddress, ClassHash };
                 proposal_status_code: updateable_proposal.proposal_status_code,
                 rejection_reason_code: updateable_proposal.rejection_reason_code,
                 risk_score: updateable_proposal.risk_score,
-                premium_rate: updateable_proposal.premium_rate
-
+                premium_rate: updateable_proposal.premium_rate,
+                has_reinsurance: updateable_proposal.has_reinsurance,
+                reinsurance_txn_id: updateable_proposal.reinsurance_txn_id,
             };
 
             self.proposals.write(proposal_id, updated_proposal);
@@ -274,7 +277,9 @@ use starknet::{ ContractAddress, ClassHash };
                 proposal_status: convert_proposal_code_to_status(proposal.proposal_status_code),
                 rejection_reason: convert_rejection_code_to_reason(proposal.rejection_reason_code),
                 risk_score: proposal.risk_score,
-                premium_rate: proposal.premium_rate
+                premium_rate: proposal.premium_rate,
+                has_reinsurance: proposal.has_reinsurance,
+                reinsurance_txn_id: proposal.reinsurance_txn_id,
             };
 
             response_obj
@@ -359,7 +364,9 @@ use starknet::{ ContractAddress, ClassHash };
             premium_rate: u16,
             risk_score: u256,
             proposal_status_code: u8,
-            rejection_reason_code: u8
+            rejection_reason_code: u8,
+            has_reinsurance: bool,
+            reinsurance_txn_id: u256,
         ) {
 
             let approver_address: ContractAddress = get_caller_address();
@@ -391,7 +398,9 @@ use starknet::{ ContractAddress, ClassHash };
                 proposal_status_code: proposal_status_code,
                 rejection_reason_code: rejection_reason_code,
                 risk_score: risk_score,
-                premium_rate: premium_rate
+                premium_rate: premium_rate,
+                has_reinsurance: has_reinsurance,
+                reinsurance_txn_id: reinsurance_txn_id,
 
             };
 
@@ -434,7 +443,9 @@ use starknet::{ ContractAddress, ClassHash };
             premium_rate: u16,
             risk_score: u256,
             proposal_status_code: u8,
-            rejection_reason_code: u8
+            rejection_reason_code: u8,
+            has_reinsurance: bool,
+            reinsurance_txn_id: u256,
         ) {
 
             let approver_address: ContractAddress = get_caller_address();
@@ -465,8 +476,9 @@ use starknet::{ ContractAddress, ClassHash };
                 proposal_status_code: proposal_status_code,
                 rejection_reason_code: rejection_reason_code,
                 risk_score: risk_score,
-                premium_rate: premium_rate
-
+                premium_rate: premium_rate,
+                has_reinsurance: has_reinsurance,
+                reinsurance_txn_id: reinsurance_txn_id,
             };
 
             self.proposals.write(proposal_id, updated_proposal);
@@ -498,49 +510,6 @@ use starknet::{ ContractAddress, ClassHash };
             }            
         }
 
-        fn pay_premium_on_approval(
-            ref self: ContractState,
-            proposal_id: u256,
-        ) -> bool {
-
-
-            let paying_proposal: ProposalForm = self.proposals.read(proposal_id);
-
-            let is_approved: bool = paying_proposal.risk_analytics_approved;
-
-            assert!(is_approved, "Unathorized: Proposal is yet to be approved");
-
-            let _treasury_address: ContractAddress = self.treasury_address.read();
-            let policy_minting_address: ContractAddress = self.policy_minting_address.read();
-
-            let premium_paid: bool = true;
-
-
-            if premium_paid {
-
-                let policy_mint_dispatcher: IPolicyNFTDispatcher = IPolicyNFTDispatcher { contract_address: policy_minting_address  };
-
-                let policy_minted_id: u256 = policy_mint_dispatcher.mint_policy(proposal_id);
-
-                let new_policy: PolicyDataResponse = policy_mint_dispatcher.get_policy_data(policy_minted_id);
-
-            
-                    let mint_event: PremiumPaymentSuccess = PremiumPaymentSuccess {
-                        proposal_id: proposal_id,
-                        policyholder: new_policy.policyholder,
-                        payer: new_policy.policyholder,
-                        amount: new_policy.premium,
-                        policy_token_id: new_policy.policy_id,
-                        policy_id: new_policy.policy_id                          
-                };
-
-                self.emit(mint_event);
-                return true;
-            } else {
-                return false;
-            }
-
-        }
 
         fn set_treasury_address(
             ref self: ContractState,

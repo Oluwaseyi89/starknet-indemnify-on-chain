@@ -1,13 +1,14 @@
 #[starknet::contract]
 pub mod TreasuryManagement {
     // use crate::contracts::erc721_policy::PolicyNFT::Event;
+use crate::structs::structs::PremiumPaymentResponse;
 use crate::interfaces::interfaces::IPolicyNFTDispatcher;
 use crate::interfaces::interfaces::IProposalFormDispatcher;
 use crate::structs::structs::ClaimPayment;
 use starknet::{ ContractAddress, ClassHash };
     use starknet::{
         get_caller_address,
-        get_contract_address,
+        // get_contract_address,
         get_block_timestamp,
         get_tx_info,
         TxInfo
@@ -29,7 +30,7 @@ use starknet::{ ContractAddress, ClassHash };
 
     use starknet::storage::{
         Map,
-        // StorageMapReadAccess,
+        StorageMapReadAccess,
         StorageMapWriteAccess,
         StoragePointerReadAccess,
         StoragePointerWriteAccess
@@ -236,11 +237,11 @@ use starknet::{ ContractAddress, ClassHash };
 
             assert!(balance >= actual_premium_payable, "Caller doesn't have enough balance");
 
-            let contract: ContractAddress = get_contract_address();
+            // let contract: ContractAddress = get_contract_address();
 
-            let allowance: u256 = strk_dispatcher.allowance(caller, contract);
+            let allowance: u256 = strk_dispatcher.allowance(caller, treasury_account);
 
-            assert!(allowance >= actual_premium_payable, "Contract is not allowed to spend enough premium");
+            assert!(allowance >= actual_premium_payable, "Treasury Account is not allowed to spend enough premium");
 
 
             let success: bool = strk_dispatcher.transfer_from(caller, treasury_account, actual_premium_payable);
@@ -285,32 +286,151 @@ use starknet::{ ContractAddress, ClassHash };
              current_txn_id
         }
     
-        // fn update_premium_payment(
-        //     ref self: ContractState,
-        //     transaction_id: u256,
-        //     policy_id: u256,
-        //     txn_hash: ByteArray,
-        //     payment_status_code: u8 
-        // ) {
+        fn update_premium_payment(
+            ref self: ContractState,
+            transaction_id: u256,
+            policy_id: u256,
+            txn_hash: felt252,
+            payment_status_code: u8 
+        ) {
 
-        // }
+            let updateable_premium_payment: PremiumPayment = self.premiums.read(transaction_id);
+
+            let current_time: u64 = get_block_timestamp();
+
+            let updated_premium_payment: PremiumPayment = PremiumPayment {
+                transaction_id: transaction_id,
+                proposal_id: updateable_premium_payment.proposal_id,
+                policy_id: policy_id,
+                payer_address: updateable_premium_payment.payer_address,
+                policyholder: updateable_premium_payment.policyholder,
+                amount_paid: updateable_premium_payment.amount_paid,
+                sum_insured: updateable_premium_payment.sum_insured,
+                payment_date: updateable_premium_payment.payment_date,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                payment_status_code:  payment_status_code
+            };
+
+            self.premiums.write(transaction_id, updated_premium_payment);
+
+        }
     
-        // fn get_premium_payment(
-        //     self: @ContractState,
-        //     transaction_id: u256
-        // ) -> PremiumPaymentResponse {
+        fn get_premium_payment(
+            self: @ContractState,
+            transaction_id: u256
+        ) -> PremiumPaymentResponse {
 
-        // }
+            let sought_premium_payment: PremiumPayment = self.premiums.read(transaction_id);
+
+            let response_obj: PremiumPaymentResponse = PremiumPaymentResponse {
+                    transaction_id: transaction_id,
+                    proposal_id: sought_premium_payment.proposal_id,
+                    policy_id: sought_premium_payment.policy_id,
+                    payer_address: sought_premium_payment.payer_address,
+                    policyholder: sought_premium_payment.policyholder,
+                    amount_paid: sought_premium_payment.amount_paid,
+                    sum_insured: sought_premium_payment.sum_insured,
+                    payment_date: sought_premium_payment.payment_date,
+                    updated_at: sought_premium_payment.updated_at,
+                    txn_hash: sought_premium_payment.txn_hash,
+                    payment_status: convert_payment_code_to_status(sought_premium_payment.payment_status_code)
+            };
+
+            response_obj
+        }
     
-        // fn pay_claim(
-        //     ref self: ContractState,
-        //     policy_id: u256,
-        //     claim_id: u256,
-        //     policyholder: ContractAddress,
-        //     third_party_account: ContractAddress,
-        // ) -> u256 {
+        fn pay_claim(
+            ref self: ContractState,
+            policy_id: u256,
+            claim_id: u256,
+            policyholder: ContractAddress,
+            third_party_account: ContractAddress,
+            settlement_source_code: u8
+        ) -> u256 {
 
-        // }
+            let current_txn_id: u256 = self.next_transaction_id.read();
+
+            let current_time: u64 = get_block_timestamp();
+
+
+            let policy_minting_dispatcher: IPolicyNFTDispatcher = IPolicyNFTDispatcher {
+                contract_address: self.policy_minting_address.read()
+            };
+
+            let claim_dispatcher: IClaimDispatcher = IClaimDispatcher {
+                contract_address: self.claims_contract_address.read()
+            };
+
+            let policy_obj: PolicyDataResponse = policy_minting_dispatcher.get_policy_data(policy_id);
+            let claim_obj: InsuranceClaimResponse = claim_dispatcher.get_claim_by_id(claim_id);
+
+            let is_governance_approved: bool = claim_obj.governance_approved;
+            let is_risk_analytics_approved: bool = claim_obj.risk_analytics_approved;
+
+            let claim_is_approved: bool = is_claim_approved_for_settlement(
+                is_risk_analytics_approved,
+                is_governance_approved
+            );
+
+            let payable_claim_amount: u256 = claim_obj.approved_settlement_amount;
+
+            assert!(claim_is_approved, "PaymentDenied: Claim has not been approved for settlement");
+
+            let treasury_account: ContractAddress = self.starknet_indemnify_treasury_account.read();
+
+
+            let strk_dispatcher: IERC20Dispatcher = IERC20Dispatcher {
+                contract_address: self.strk_contract_address.read()
+            }; 
+
+            // let caller: ContractAddress = get_caller_address();
+
+            let balance: u256 = strk_dispatcher.balance_of(treasury_account);
+
+            assert!(balance >= payable_claim_amount, "Treasury Account doesn't have enough balance");
+
+            let allowance: u256 = strk_dispatcher.allowance(treasury_account, policyholder);
+
+            assert!(allowance >= payable_claim_amount, "Policyholder is not allowed to spend enough claimed token");
+
+
+            let success: bool = strk_dispatcher.transfer_from(treasury_account, policyholder, payable_claim_amount);
+
+            assert!(success, "Claim payment failed");
+
+
+
+
+            let txn_info: TxInfo = get_tx_info().unbox();
+
+            let txn_hash: felt252 = txn_info.transaction_hash;
+
+
+            let paid_claim_txn: ClaimPayment = ClaimPayment {
+                transaction_id: current_txn_id,
+                proposal_id: policy_obj.proposal_id,
+                policy_id: policy_id,
+                claim_id: claim_id,
+                policyholder: policyholder,
+                third_party_account: third_party_account,
+                claim_amount: claim_obj.claim_amount,
+                approved_settlement_amount: claim_obj.approved_settlement_amount,
+                settlement_date: current_time,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                settlement_status_code: convert_payment_status_to_code(PaymentStatus::Successful),
+                settlement_source_code: settlement_source_code
+            };
+
+            self.claim_payments.write(current_txn_id, paid_claim_txn);
+
+            let incremented_txn_id: u256 = current_txn_id + 1;
+
+            self.next_transaction_id.write(incremented_txn_id);
+
+            current_txn_id
+        }
     
         // fn update_claim_payment(
         //     ref self: ContractState,
@@ -558,18 +678,6 @@ use starknet::{ ContractAddress, ClassHash };
         // }
     
     }
-
-    fn is_proposal_approved_for_premium_payment(is_risk_analytics_approved: bool, is_governance_approved: bool) -> bool {
-        
-        if is_risk_analytics_approved {
-            return true;
-        } else if is_governance_approved {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
 
 
     #[abi(embed_v0)]

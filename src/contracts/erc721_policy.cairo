@@ -173,6 +173,8 @@ pub mod PolicyNFT {
                 is_expired: false,
                 claims_count: 0,
                 has_claimed: false,
+                has_reinsurance: paid_proposal.has_reinsurance,
+                reinsurance_txn_id: paid_proposal.reinsurance_txn_id,
                 aggregate_claim_amount: 0                
             };
 
@@ -192,6 +194,8 @@ pub mod PolicyNFT {
                 is_expired: false,
                 claims_count: 0,
                 has_claimed: false,
+                has_reinsurance: paid_proposal.has_reinsurance,
+                reinsurance_txn_id: paid_proposal.reinsurance_txn_id,
                 claim_ids: array![],
                 aggregate_claim_amount: 0
             };
@@ -276,6 +280,8 @@ pub mod PolicyNFT {
                 is_expired: policy_data.is_expired,
                 claims_count: len.into(),
                 has_claimed: has_claimed,
+                has_reinsurance: policy_data.has_reinsurance,
+                reinsurance_txn_id: policy_data.reinsurance_txn_id,
                 claim_ids: claim_array,
                 aggregate_claim_amount: policy_aggregate_claim_amount
             };
@@ -327,6 +333,8 @@ pub mod PolicyNFT {
                         is_expired: current_policy_data.is_expired,
                         claims_count: current_policy_data.claims_count,
                         has_claimed: current_policy_data.has_claimed,
+                        has_reinsurance: current_policy_data.has_reinsurance,
+                        reinsurance_txn_id: current_policy_data.reinsurance_txn_id,
                         aggregate_claim_amount: current_policy_data.aggregate_claim_amount     
                     },
                 1 => PolicyData {
@@ -345,6 +353,8 @@ pub mod PolicyNFT {
                         is_expired: current_policy_data.is_expired,
                         claims_count: current_policy_data.claims_count,
                         has_claimed: current_policy_data.has_claimed,
+                        has_reinsurance: current_policy_data.has_reinsurance,
+                        reinsurance_txn_id: current_policy_data.reinsurance_txn_id,
                         aggregate_claim_amount: current_policy_data.aggregate_claim_amount     
                     },
                 _ => current_policy_data

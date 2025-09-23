@@ -412,3 +412,28 @@ pub fn convert_reinsurance_contract_code_to_type(code: u8) -> ReinsuranceContrac
 
     contract_type
 }
+
+
+
+pub fn is_claim_approved_for_settlement(is_risk_analytics_approved: bool, is_governance_approved: bool) -> bool {
+        
+    if is_risk_analytics_approved {
+        return true;
+    } else if is_governance_approved {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
+pub fn is_proposal_approved_for_premium_payment(is_risk_analytics_approved: bool, is_governance_approved: bool) -> bool {
+        
+    if is_risk_analytics_approved {
+        return true;
+    } else if is_governance_approved {
+        return true;
+    } else {
+        return false;
+    }
+}
