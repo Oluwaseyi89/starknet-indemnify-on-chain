@@ -221,7 +221,7 @@ use crate::enums::enums::*;
     }
 
     #[derive(Drop, Serde, Clone)]
-    pub struct NativeTokenPurchaseReponse {
+    pub struct NativeTokenPurchaseResponse {
         pub transaction_id: u256,
         pub buyer_address: ContractAddress,
         pub seller_address: ContractAddress,

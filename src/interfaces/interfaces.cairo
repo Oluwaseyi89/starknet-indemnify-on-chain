@@ -355,35 +355,35 @@ pub trait ITreasuryManagement<TContractState> {
         quantity: u256,
     ) -> u256;
 
-    // fn update_stindem_purchase_detail(
-    //     ref self: TContractState,
-    //     transaction_id: u256,
-    //     txn_hash: ByteArray,
-    //     payment_status_code: u8
-    // );
+    fn update_stindem_purchase_detail(
+        ref self: TContractState,
+        transaction_id: u256,
+        txn_hash: felt252,
+        payment_status_code: u8
+    );
 
-    // fn get_stindem_purchase_detail(
-    //     self: @TContractState,
-    //     transaction_id: u256
-    // ) -> NativeTokenPurchaseReponse;
+    fn get_stindem_purchase_detail(
+        self: @TContractState,
+        transaction_id: u256
+    ) -> NativeTokenPurchaseResponse;
 
-    // fn recover_stindem_from_market(
-    //     ref self: TContractState,
-    //     seller_address: ContractAddress,
-    //     quantity: u256,
-    // ) -> u256;
+    fn recover_stindem_from_market(
+        ref self: TContractState,
+        seller_address: ContractAddress,
+        quantity: u256,
+    ) -> u256;
 
-    // fn update_stindem_recovery_from_market(
-    //     ref self: TContractState,
-    //     transaction_id: u256,
-    //     txn_hash: ByteArray,
-    //     payment_status_code: u8
-    // );
+    fn update_stindem_recovery_from_market(
+        ref self: TContractState,
+        transaction_id: u256,
+        txn_hash: felt252,
+        payment_status_code: u8
+    );
 
-    // fn get_stindem_recovery_txn_detail(
-    //     self: @TContractState,
-    //     transaction_id: u256
-    // ) -> NativeTokenRecoveryResponse;
+    fn get_stindem_recovery_txn_detail(
+        self: @TContractState,
+        transaction_id: u256
+    ) -> NativeTokenRecoveryResponse;
 
     // fn purchase_voting_commitment(
     //     ref self: TContractState,

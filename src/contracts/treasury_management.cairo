@@ -580,45 +580,197 @@ use starknet::{ ContractAddress, ClassHash };
 
         }
     
-        // fn update_stindem_purchase_detail(
-        //     ref self: ContractState,
-        //     transaction_id: u256,
-        //     txn_hash: ByteArray,
-        //     payment_status_code: u8
-        // ) {
+        fn update_stindem_purchase_detail(
+            ref self: ContractState,
+            transaction_id: u256,
+            txn_hash: felt252,
+            payment_status_code: u8
+        ) {
+            let updateable_txn: NativeTokenPurchase = self.native_token_purchases.read(transaction_id);
 
-        // }
+            let current_time: u64 = get_block_timestamp();
+
+            let updated_txn: NativeTokenPurchase = NativeTokenPurchase {
+                transaction_id: transaction_id,
+                buyer_address: updateable_txn.buyer_address,
+                seller_address: updateable_txn.seller_address,
+                token_address: updateable_txn.token_address,
+                token_symbol: updateable_txn.token_symbol,
+                quantity: updateable_txn.quantity,
+                unit_price: updateable_txn.unit_price,
+                total_price_paid: updateable_txn.total_price_paid,
+                payment_date: updateable_txn.payment_date,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                payment_status_code: payment_status_code
+            };
+
+            self.native_token_purchases.write(transaction_id, updated_txn);
+        }
     
-        // fn get_stindem_purchase_detail(
-        //     self: @ContractState,
-        //     transaction_id: u256
-        // ) -> NativeTokenPurchaseReponse {
+        fn get_stindem_purchase_detail(
+            self: @ContractState,
+            transaction_id: u256
+        ) -> NativeTokenPurchaseResponse {
 
-        // }
+            let sought_txn: NativeTokenPurchase = self.native_token_purchases.read(transaction_id);
+
+            let response_obj: NativeTokenPurchaseResponse = NativeTokenPurchaseResponse {
+                transaction_id: transaction_id,
+                buyer_address: sought_txn.buyer_address,
+                seller_address: sought_txn.seller_address,
+                token_address: sought_txn.token_address,
+                token_symbol: sought_txn.token_symbol,
+                quantity: sought_txn.quantity,
+                unit_price: sought_txn.unit_price,
+                total_price_paid: sought_txn.total_price_paid,
+                payment_date: sought_txn.payment_date,
+                updated_at: sought_txn.updated_at,
+                txn_hash: sought_txn.txn_hash,
+                payment_status: convert_payment_code_to_status(sought_txn.payment_status_code)
+            };
+
+            response_obj
+        }
     
-        // fn recover_stindem_from_market(
-        //     ref self: ContractState,
-        //     seller_address: ContractAddress,
-        //     quantity: u256,
-        // ) -> u256 {
+        fn recover_stindem_from_market(
+            ref self: ContractState,
+            seller_address: ContractAddress,
+            quantity: u256,
+        ) -> u256 {
 
-        // }
+            let current_txn_id: u256 = self.next_transaction_id.read();
+
+
+            let treasury_account: ContractAddress = self.starknet_indemnify_treasury_account.read();
+
+            let stindem_treasury: ContractAddress = self.starknet_indemnify_stindem_treasury.read();
+
+            let strk_dispatcher: IERC20Dispatcher = IERC20Dispatcher {
+                contract_address: self.strk_contract_address.read()
+            }; 
+
+            let stindem_dispatcher: IERC20Dispatcher = IERC20Dispatcher {
+                contract_address: self.stindem_token_address.read()
+            };
+
+            let unit_price_of_stindem_in_strk: u256 = 1/self.current_stindem_to_strk_value.read();
+
+            let amount_of_strk_to_bill: u256 = unit_price_of_stindem_in_strk * quantity;
+
+            let caller: ContractAddress = get_caller_address();
+
+            let balance: u256 = strk_dispatcher.balance_of(treasury_account);
+
+            let stindem_balance: u256 = stindem_dispatcher.balance_of(caller);
+
+            assert!(stindem_balance >= quantity, "Caller STINDEM balance is low");
+
+            assert!(balance >= amount_of_strk_to_bill, "Treasury doesn't have enough STRK balance");
+
+            let allowance: u256 = strk_dispatcher.allowance(treasury_account, seller_address);
+
+            let stindem_allowance: u256 = stindem_dispatcher.allowance(caller, stindem_treasury);
+
+            assert!(stindem_allowance >= quantity, "STINDEM TREASURY is not allowed to spend enough STINDEM");
+
+            assert!(allowance >= amount_of_strk_to_bill, "Seller is not allowed to spend enough STRK");
+
+
+            let success: bool = strk_dispatcher.transfer_from(treasury_account, seller_address, amount_of_strk_to_bill);
+
+            assert!(success, "Transferring STRK failed");
+
+            let successfulTransfer: bool = stindem_dispatcher.transfer_from(caller, stindem_treasury, quantity);
+
+            assert!(successfulTransfer, "Transferring STINDEM failed");
+
+            let current_time: u64 = get_block_timestamp();
+
+            let txn_info: TxInfo = get_tx_info().unbox();
+
+            let txn_hash: felt252 = txn_info.transaction_hash;
+
+            let native_token_recovered: NativeTokenRecovery = NativeTokenRecovery {
+                transaction_id: current_txn_id,
+                seller_address: seller_address,
+                buyer_address: treasury_account,
+                token_address: self.strk_contract_address.read(),
+                token_symbol: "STRK",
+                quantity: quantity,
+                unit_price: unit_price_of_stindem_in_strk,
+                total_price_paid: amount_of_strk_to_bill,
+                payment_date: current_time,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                payment_status_code: convert_payment_status_to_code(PaymentStatus::Successful)
+            };
+
+            self.native_token_recoveries.write(current_txn_id, native_token_recovered);    
+
+
+            let incremented_txn_id: u256 = current_txn_id + 1;
+
+            self.next_transaction_id.write(incremented_txn_id);
+
+            current_txn_id
+
+        }
     
-        // fn update_stindem_recovery_from_market(
-        //     ref self: ContractState,
-        //     transaction_id: u256,
-        //     txn_hash: ByteArray,
-        //     payment_status_code: u8
-        // ) {
+        fn update_stindem_recovery_from_market(
+            ref self: ContractState,
+            transaction_id: u256,
+            txn_hash: felt252,
+            payment_status_code: u8
+        ) {
 
-        // }
+            let updateable_txn: NativeTokenRecovery = self.native_token_recoveries.read(transaction_id);
+
+            let current_time: u64 = get_block_timestamp();
+
+            let updated_txn: NativeTokenRecovery = NativeTokenRecovery {
+                transaction_id: transaction_id,
+                seller_address: updateable_txn.seller_address,
+                buyer_address: updateable_txn.buyer_address,
+                token_address: updateable_txn.token_address,
+                token_symbol: updateable_txn.token_symbol,
+                quantity: updateable_txn.quantity,
+                unit_price: updateable_txn.unit_price,
+                total_price_paid: updateable_txn.total_price_paid,
+                payment_date: updateable_txn.payment_date,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                payment_status_code: payment_status_code
+            };
+
+            self.native_token_recoveries.write(transaction_id, updated_txn);
+        }
     
-        // fn get_stindem_recovery_txn_detail(
-        //     self: @ContractState,
-        //     transaction_id: u256
-        // ) -> NativeTokenRecoveryResponse {
+        fn get_stindem_recovery_txn_detail(
+            self: @ContractState,
+            transaction_id: u256
+        ) -> NativeTokenRecoveryResponse {
 
-        // }
+            let sought_txn: NativeTokenRecovery = self.native_token_recoveries.read(transaction_id);
+
+            let response_obj: NativeTokenRecoveryResponse = NativeTokenRecoveryResponse {
+                transaction_id: transaction_id,
+                seller_address: sought_txn.seller_address,
+                buyer_address: sought_txn.buyer_address,
+                token_address: sought_txn.token_address,
+                token_symbol: sought_txn.token_symbol,
+                quantity: sought_txn.quantity,
+                unit_price: sought_txn.unit_price,
+                total_price_paid: sought_txn.total_price_paid,
+                payment_date: sought_txn.payment_date,
+                updated_at: sought_txn.updated_at,
+                txn_hash: sought_txn.txn_hash,
+                payment_status: convert_payment_code_to_status(sought_txn.payment_status_code)
+            };
+
+            response_obj
+
+        }
     
         // fn purchase_voting_commitment(
         //     ref self: ContractState,
