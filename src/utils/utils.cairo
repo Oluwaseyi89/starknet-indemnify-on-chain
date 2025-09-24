@@ -320,7 +320,7 @@ pub fn convert_payment_code_to_status(code: u8) -> PaymentStatus {
 
 
 
-pub fn convert_claims_source_to_code(source: ClaimsPaymentSource) -> u8 {
+pub fn convert_claims_settlement_source_to_code(source: ClaimsPaymentSource) -> u8 {
 
     let code: u8 = match source {
         ClaimsPaymentSource::Reserve => 0,
@@ -334,7 +334,7 @@ pub fn convert_claims_source_to_code(source: ClaimsPaymentSource) -> u8 {
 }
 
 
-pub fn convert_claims_source_code_to_source(code: u8) -> ClaimsPaymentSource {
+pub fn convert_claims_settlement_source_code_to_source(code: u8) -> ClaimsPaymentSource {
 
     let source: ClaimsPaymentSource = match code {
         0 => ClaimsPaymentSource::Reserve,

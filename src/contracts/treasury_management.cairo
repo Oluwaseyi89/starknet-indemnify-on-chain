@@ -1,6 +1,9 @@
 #[starknet::contract]
 pub mod TreasuryManagement {
     // use crate::contracts::erc721_policy::PolicyNFT::Event;
+use crate::enums::enums::PaymentStatus;
+use crate::structs::structs::NativeTokenPurchase;
+use crate::utils::utils::convert_payment_code_to_status;
 use crate::structs::structs::PremiumPaymentResponse;
 use crate::interfaces::interfaces::IPolicyNFTDispatcher;
 use crate::interfaces::interfaces::IProposalFormDispatcher;
@@ -148,7 +151,8 @@ use starknet::{ ContractAddress, ClassHash };
         claims_contract_address: ContractAddress,
         governance_contract_address: ContractAddress,
         strk_contract_address: ContractAddress,
-        starknet_indemnify_treasury_account: ContractAddress
+        starknet_indemnify_treasury_account: ContractAddress,
+        starknet_indemnify_stindem_treasury: ContractAddress,
     }
 
 
@@ -432,31 +436,149 @@ use starknet::{ ContractAddress, ClassHash };
             current_txn_id
         }
     
-        // fn update_claim_payment(
-        //     ref self: ContractState,
-        //     transaction_id: u256,
-        //     third_party_account: ContractAddress,
-        //     txn_hash: ByteArray,
-        //     settlement_status_code: u8,
-        //     settlement_source_code: u8
-        // ) {
+        fn update_claim_payment(
+            ref self: ContractState,
+            transaction_id: u256,
+            third_party_account: ContractAddress,
+            txn_hash: felt252,
+            settlement_status_code: u8,
+            settlement_source_code: u8
+        ) {
 
-        // }
+            let claim_to_update: ClaimPayment = self.claim_payments.read(transaction_id);
+
+            let current_time: u64 = get_block_timestamp();
+
+            let updated_claim: ClaimPayment = ClaimPayment {
+                transaction_id: transaction_id,
+                proposal_id: claim_to_update.proposal_id,
+                policy_id: claim_to_update.policy_id,
+                claim_id: claim_to_update.claim_id,
+                policyholder: claim_to_update.policyholder,
+                third_party_account: third_party_account,
+                claim_amount: claim_to_update.claim_amount,
+                approved_settlement_amount: claim_to_update.approved_settlement_amount,
+                settlement_date: claim_to_update.settlement_date,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                settlement_status_code: settlement_status_code,
+                settlement_source_code: settlement_source_code
+            };
+
+            self.claim_payments.write(transaction_id, updated_claim);
+        }
     
-        // fn get_claim_payment(
-        //     self: @ContractState,
-        //     transaction_id: u256
-        // ) -> ClaimPaymentResponse {
+        fn get_claim_payment(
+            self: @ContractState,
+            transaction_id: u256
+        ) -> ClaimPaymentResponse {
 
-        // }
+            let sought_claim_payment: ClaimPayment = self.claim_payments.read(transaction_id);
+
+            let response_obj: ClaimPaymentResponse = ClaimPaymentResponse {
+                transaction_id: transaction_id,
+                proposal_id: sought_claim_payment.proposal_id,
+                policy_id: sought_claim_payment.policy_id,
+                claim_id: sought_claim_payment.claim_id,
+                policyholder: sought_claim_payment.policyholder,
+                third_party_account: sought_claim_payment.third_party_account,
+                claim_amount: sought_claim_payment.claim_amount,
+                approved_settlement_amount: sought_claim_payment.approved_settlement_amount,
+                settlement_date: sought_claim_payment.settlement_date,
+                updated_at: sought_claim_payment.updated_at,
+                txn_hash: sought_claim_payment.txn_hash,
+                settlement_status: convert_payment_code_to_status(sought_claim_payment.settlement_status_code),
+                settlement_source: convert_claims_settlement_source_code_to_source(sought_claim_payment.settlement_source_code)
+            };
+
+
+            response_obj
+
+        }
     
-        // fn purchase_stindem(
-        //     ref self: ContractState,
-        //     buyer_address: ContractAddress,
-        //     quantity: u256,
-        // ) -> u256 {
+        fn purchase_stindem(
+            ref self: ContractState,
+            buyer_address: ContractAddress,
+            quantity: u256,
+        ) -> u256 {
 
-        // }
+            let current_txn_id: u256 = self.next_transaction_id.read();
+
+
+            let treasury_account: ContractAddress = self.starknet_indemnify_treasury_account.read();
+
+            let stindem_treasury: ContractAddress = self.starknet_indemnify_stindem_treasury.read();
+
+            let strk_dispatcher: IERC20Dispatcher = IERC20Dispatcher {
+                contract_address: self.strk_contract_address.read()
+            }; 
+
+            let stindem_dispatcher: IERC20Dispatcher = IERC20Dispatcher {
+                contract_address: self.stindem_token_address.read()
+            };
+
+            let unit_price_of_stindem_in_strk: u256 = 1/self.current_stindem_to_strk_value.read();
+
+            let amount_of_strk_to_bill: u256 = unit_price_of_stindem_in_strk * quantity;
+
+            let caller: ContractAddress = get_caller_address();
+
+            let balance: u256 = strk_dispatcher.balance_of(caller);
+
+            let stindem_balance: u256 = stindem_dispatcher.balance_of(stindem_treasury);
+
+            assert!(stindem_balance >= quantity, "STINDEM Treasury balance is low");
+
+            assert!(balance >= amount_of_strk_to_bill, "Caller doesn't have enough STRK balance");
+
+            let allowance: u256 = strk_dispatcher.allowance(caller, treasury_account);
+
+            let stindem_allowance: u256 = stindem_dispatcher.allowance(stindem_treasury, buyer_address);
+
+            assert!(stindem_allowance >= quantity, "Buyer is not allowed to spend enough STINDEM");
+
+            assert!(allowance >= amount_of_strk_to_bill, "Treasury Account is not allowed to spend enough STRK");
+
+
+            let success: bool = strk_dispatcher.transfer_from(caller, treasury_account, amount_of_strk_to_bill);
+
+            assert!(success, "Billing STRK failed");
+
+            let successfulTransfer: bool = stindem_dispatcher.transfer_from(stindem_treasury, buyer_address, quantity);
+
+            assert!(successfulTransfer, "Transferring STINDEM failed");
+
+            let current_time: u64 = get_block_timestamp();
+
+            let txn_info: TxInfo = get_tx_info().unbox();
+
+            let txn_hash: felt252 = txn_info.transaction_hash;
+
+            let native_token_sale: NativeTokenPurchase = NativeTokenPurchase {
+                transaction_id: current_txn_id,
+                buyer_address: buyer_address,
+                seller_address: stindem_treasury,
+                token_address: self.stindem_token_address.read(),
+                token_symbol: "STINDEM",
+                quantity: quantity,
+                unit_price: unit_price_of_stindem_in_strk,
+                total_price_paid: amount_of_strk_to_bill,
+                payment_date: current_time,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                payment_status_code: convert_payment_status_to_code(PaymentStatus::Successful)
+            };
+
+            self.native_token_purchases.write(current_txn_id, native_token_sale);    
+
+
+            let incremented_txn_id: u256 = current_txn_id + 1;
+
+            self.next_transaction_id.write(incremented_txn_id);
+
+            current_txn_id
+
+        }
     
         // fn update_stindem_purchase_detail(
         //     ref self: ContractState,

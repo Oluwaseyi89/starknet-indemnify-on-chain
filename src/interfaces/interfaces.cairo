@@ -335,25 +335,25 @@ pub trait ITreasuryManagement<TContractState> {
         settlement_source_code: u8
     ) -> u256;
 
-    // fn update_claim_payment(
-    //     ref self: TContractState,
-    //     transaction_id: u256,
-    //     third_party_account: ContractAddress,
-    //     txn_hash: ByteArray,
-    //     settlement_status_code: u8,
-    //     settlement_source_code: u8
-    // );
+    fn update_claim_payment(
+        ref self: TContractState,
+        transaction_id: u256,
+        third_party_account: ContractAddress,
+        txn_hash: felt252,
+        settlement_status_code: u8,
+        settlement_source_code: u8
+    );
 
-    // fn get_claim_payment(
-    //     self: @TContractState,
-    //     transaction_id: u256
-    // ) -> ClaimPaymentResponse;
+    fn get_claim_payment(
+        self: @TContractState,
+        transaction_id: u256
+    ) -> ClaimPaymentResponse;
 
-    // fn purchase_stindem(
-    //     ref self: TContractState,
-    //     buyer_address: ContractAddress,
-    //     quantity: u256,
-    // ) -> u256;
+    fn purchase_stindem(
+        ref self: TContractState,
+        buyer_address: ContractAddress,
+        quantity: u256,
+    ) -> u256;
 
     // fn update_stindem_purchase_detail(
     //     ref self: TContractState,
