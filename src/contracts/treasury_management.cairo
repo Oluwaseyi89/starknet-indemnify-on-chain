@@ -146,6 +146,9 @@ use starknet::{ ContractAddress, ClassHash };
         starknet_indemnify_eth_balance: u256,
         starknet_indemnify_btc_balance: u256,
 
+
+        stindem_qty_to_vote: u256,
+
         proposal_form_address: ContractAddress,
         policy_minting_address: ContractAddress,
         claims_contract_address: ContractAddress,
@@ -772,29 +775,130 @@ use starknet::{ ContractAddress, ClassHash };
 
         }
     
-        // fn purchase_voting_commitment(
-        //     ref self: ContractState,
-        //     seller_address: ContractAddress,
-        //     quantity: u256,
-        // ) {
+        fn purchase_voting_commitment(
+            ref self: ContractState,
+            seller_address: ContractAddress,
+        ) -> (u256, felt252) {
 
-        // }
+            let current_txn_id: u256 = self.next_transaction_id.read();
+
+            let quantity: u256 = self.stindem_qty_to_vote.read();
+
+
+
+            let stindem_treasury: ContractAddress = self.starknet_indemnify_stindem_treasury.read();
+
+          
+
+            let stindem_dispatcher: IERC20Dispatcher = IERC20Dispatcher {
+                contract_address: self.stindem_token_address.read()
+            };
+
+            let unit_price_of_stindem_in_strk: u256 = 1/self.current_stindem_to_strk_value.read();
+
+            let caller: ContractAddress = get_caller_address();
+
+
+            let stindem_balance: u256 = stindem_dispatcher.balance_of(caller);
+
+            assert!(stindem_balance >= quantity, "Caller STINDEM balance is low");
+
+            let stindem_allowance: u256 = stindem_dispatcher.allowance(caller, stindem_treasury);
+
+            assert!(stindem_allowance >= quantity, "STINDEM TREASURY is not allowed to spend enough STINDEM");
+
+
+            let successfulTransfer: bool = stindem_dispatcher.transfer_from(caller, stindem_treasury, quantity);
+
+            assert!(successfulTransfer, "Transferring STINDEM failed");
+
+            let current_time: u64 = get_block_timestamp();
+
+            let txn_info: TxInfo = get_tx_info().unbox();
+
+            let txn_hash: felt252 = txn_info.transaction_hash;
+
+            let vote_right_purchase: PurchaseVotingCommitment = PurchaseVotingCommitment {
+                transaction_id: current_txn_id,
+                seller_address: seller_address,
+                buyer_address: stindem_treasury,
+                token_address: self.stindem_token_address.read(),
+                token_symbol: "STINDEM",
+                quantity: quantity,
+                unit_price: unit_price_of_stindem_in_strk,
+                total_price_paid: 0,
+                payment_date: current_time,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                payment_status_code: convert_payment_status_to_code(PaymentStatus::Successful)
+            };
+
+
+            self.vote_right_payments.write(current_txn_id, vote_right_purchase);    
+
+
+            let incremented_txn_id: u256 = current_txn_id + 1;
+
+            self.next_transaction_id.write(incremented_txn_id);
+
+            (current_txn_id, txn_hash)
+
+        }
     
-        // fn update_voting_commitment_purchase(
-        //     ref self: ContractState,
-        //     transaction_id: u256,
-        //     txn_hash: ByteArray,
-        //     payment_status_code: u8
-        // ) {
+        fn update_voting_commitment_purchase(
+            ref self: ContractState,
+            transaction_id: u256,
+            txn_hash: felt252,
+            payment_status_code: u8
+        ) {
 
-        // }
+            let updateable_txn: PurchaseVotingCommitment = self.vote_right_payments.read(transaction_id);
+
+            let current_time: u64 = get_block_timestamp();
+
+            let updated_txn: PurchaseVotingCommitment = PurchaseVotingCommitment {
+                transaction_id: transaction_id,
+                seller_address: updateable_txn.seller_address,
+                buyer_address: updateable_txn.buyer_address,
+                token_address: updateable_txn.token_address,
+                token_symbol: updateable_txn.token_symbol,
+                quantity: updateable_txn.quantity,
+                unit_price: updateable_txn.unit_price,
+                total_price_paid: updateable_txn.total_price_paid,
+                payment_date: updateable_txn.payment_date,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                payment_status_code: payment_status_code
+            };
+
+            self.vote_right_payments.write(transaction_id, updated_txn);
+
+        }
     
-        // fn get_voting_commitment_purchase_detail(
-        //     self: @ContractState,
-        //     transaction_id: u256
-        // ) -> PurchaseVotingCommitmentResponse {
+        fn get_voting_commitment_purchase_detail(
+            self: @ContractState,
+            transaction_id: u256
+        ) -> PurchaseVotingCommitmentResponse {
 
-        // }
+            let sought_txn: PurchaseVotingCommitment = self.vote_right_payments.read(transaction_id);
+
+            let response_obj: PurchaseVotingCommitmentResponse = PurchaseVotingCommitmentResponse {
+                transaction_id: transaction_id,
+                seller_address: sought_txn.seller_address,
+                buyer_address: sought_txn.buyer_address,
+                token_address: sought_txn.token_address,
+                token_symbol: sought_txn.token_symbol,
+                quantity: sought_txn.quantity,
+                unit_price: sought_txn.unit_price,
+                total_price_paid: sought_txn.total_price_paid,
+                payment_date: sought_txn.payment_date,
+                updated_at: sought_txn.updated_at,
+                txn_hash: sought_txn.txn_hash,
+                payment_status: convert_payment_code_to_status(sought_txn.payment_status_code)
+            };
+
+            response_obj
+        }
     
         // fn initiate_reinsurance_premium_payment(
         //     ref self: ContractState,

@@ -385,23 +385,22 @@ pub trait ITreasuryManagement<TContractState> {
         transaction_id: u256
     ) -> NativeTokenRecoveryResponse;
 
-    // fn purchase_voting_commitment(
-    //     ref self: TContractState,
-    //     seller_address: ContractAddress,
-    //     quantity: u256,
-    // );
+    fn purchase_voting_commitment(
+        ref self: TContractState,
+        seller_address: ContractAddress,
+    ) -> (u256, felt252);
 
-    // fn update_voting_commitment_purchase(
-    //     ref self: TContractState,
-    //     transaction_id: u256,
-    //     txn_hash: ByteArray,
-    //     payment_status_code: u8
-    // );
+    fn update_voting_commitment_purchase(
+        ref self: TContractState,
+        transaction_id: u256,
+        txn_hash: felt252,
+        payment_status_code: u8
+    );
 
-    // fn get_voting_commitment_purchase_detail(
-    //     self: @TContractState,
-    //     transaction_id: u256
-    // ) -> PurchaseVotingCommitmentResponse;
+    fn get_voting_commitment_purchase_detail(
+        self: @TContractState,
+        transaction_id: u256
+    ) -> PurchaseVotingCommitmentResponse;
 
     // fn initiate_reinsurance_premium_payment(
     //     ref self: TContractState,
