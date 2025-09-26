@@ -197,6 +197,8 @@ use starknet::{ ContractAddress, ClassHash };
             sum_insured: u256,
             premium_frequency_code: u8,
             frequency_factor: u8,
+            has_reinsurance: bool,
+            reinsurance_txn_id: u256
         ) {
 
 
@@ -231,8 +233,8 @@ use starknet::{ ContractAddress, ClassHash };
                 rejection_reason_code: updateable_proposal.rejection_reason_code,
                 risk_score: updateable_proposal.risk_score,
                 premium_rate: updateable_proposal.premium_rate,
-                has_reinsurance: updateable_proposal.has_reinsurance,
-                reinsurance_txn_id: updateable_proposal.reinsurance_txn_id,
+                has_reinsurance: has_reinsurance,
+                reinsurance_txn_id: reinsurance_txn_id,
             };
 
             self.proposals.write(proposal_id, updated_proposal);

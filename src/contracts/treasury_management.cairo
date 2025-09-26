@@ -115,6 +115,8 @@ use starknet::{ ContractAddress, ClassHash };
         native_token_recoveries: Map<u256, NativeTokenRecovery>,
         //By transaction_id --- Credits Starknet-Indemnify STINDEM Balance
         vote_right_payments: Map<u256, PurchaseVotingCommitment>,
+        //Set Reinsurances by Transaction IDs
+        reinsurance_setting_txns: Map<u256, CreditReinsurance>,                                                                                                                                                                                                                                                
         //Current balance of Investors' fund
         investors_fund_balance: u256,
         gross_premium_written: u256,
@@ -129,6 +131,7 @@ use starknet::{ ContractAddress, ClassHash };
     
         //STINDEM token address
         stindem_token_address: ContractAddress, 
+
 
         //Conversion rates
         current_stindem_to_strk_value: u256,
@@ -900,20 +903,115 @@ use starknet::{ ContractAddress, ClassHash };
             response_obj
         }
     
-        // fn initiate_reinsurance_premium_payment(
-        //     ref self: ContractState,
-        //     insured_proposal_id: u256,
-        //     insured_policy_id: u256,
-        //     reinsurer_id: u256,
-        //     reinsurance_payment_address: ContractAddress,
-        //     percentage_reinsurance: u16,
-        //     gross_sum_insured: u256,
-        //     ceded_sum_insured: u256,
-        //     gross_premium: u256,
-        //     ceded_premium: u256,
-        // ) -> u256 {
+        fn initiate_reinsurance_premium_payment(
+            ref self: ContractState,
+            insured_proposal_id: u256,
+            insured_policy_id: u256,
+            reinsurer_id: u256,
+            reinsurance_payment_address: ContractAddress,
+            percentage_reinsurance: u16,
+            gross_sum_insured: u256,
+            ceded_sum_insured: u256,
+            gross_premium: u256,
+            ceded_premium: u256,
+        ) -> u256 {
 
-        // }
+            let current_txn_id: u256 = self.next_transaction_id.read();
+
+            let policy_dispatcher: IPolicyNFTDispatcher = IPolicyNFTDispatcher {
+                contract_address: self.policy_minting_address.read()
+            };
+
+            let proposal_dispatcher: IProposalFormDispatcher = IProposalFormDispatcher {
+                contract_address: self.proposal_form_address.read()
+            };
+
+            let proposal_obj: ProposalFormResponse = proposal_dispatcher.get_proposal_by_id(insured_proposal_id);
+
+            let policy_obj: PolicyDataResponse = policy_dispatcher.get_policy_data(insured_policy_id);
+
+            proposal_dispatcher.update_proposal(
+                insured_proposal_id,
+                proposal_obj.subject_matter,
+                proposal_obj.sum_insured,
+                convert_premium_frequency_to_code(proposal_obj.premium_frequency),
+                proposal_obj.frequency_factor,
+                true,
+                current_txn_id
+            );
+
+            policy_dispatcher.update_policy_data(
+                policy_obj.policy_id,
+                policy_obj.subject_matter,
+                policy_obj.sum_insured,
+                policy_obj.premium,
+                convert_premium_frequency_to_code(policy_obj.premium_frequency),
+                policy_obj.frequency_factor,
+                100,
+                0,
+                true,
+                current_txn_id
+            );
+
+            let reinsurer_obj: Reinsurer = self.reinsurers.read(reinsurer_id);
+
+
+            let treasury_account: ContractAddress = self.starknet_indemnify_treasury_account.read();
+
+            let strk_dispatcher: IERC20Dispatcher = IERC20Dispatcher {
+                contract_address: self.strk_contract_address.read()
+            }; 
+
+            let balance: u256 = strk_dispatcher.balance_of(treasury_account);
+
+            assert!(balance >= ceded_premium, "Treasury Account doesn't have enough balance");
+
+            let allowance: u256 = strk_dispatcher.allowance(treasury_account, reinsurance_payment_address);
+
+            assert!(allowance >= ceded_premium, "Reinsurance Account is not allowed to spend enough STRK token");
+
+
+            let success: bool = strk_dispatcher.transfer_from(treasury_account, reinsurance_payment_address, ceded_premium);
+
+            assert!(success, "Reinsurance Premium Payment failed");
+
+            let current_time: u64 = get_block_timestamp();
+
+            let txn_info: TxInfo = get_tx_info().unbox();
+
+            let txn_hash: felt252 = txn_info.transaction_hash;
+
+            
+
+            let new_reinsurance_payment: CreditReinsurance = CreditReinsurance {
+                transaction_id: current_txn_id,
+                insured_proposal_id: insured_proposal_id,
+                insured_policy_id: insured_policy_id,
+                insured: proposal_obj.proposer,
+                reinsurer_id: reinsurer_id,
+                reinsurance_payment_address: reinsurance_payment_address,
+                reinsurer_name: reinsurer_obj.reinsurer_name,
+                percentage_reinsurance: percentage_reinsurance,
+                gross_sum_insured: gross_sum_insured,
+                ceded_sum_insured: ceded_sum_insured,
+                gross_premium: gross_premium,
+                ceded_premium: ceded_premium,
+                payment_date: current_time,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                reinsurance_doc_url: "",
+                payment_status_code: convert_payment_status_to_code(PaymentStatus::Successful),
+                reinsurance_status_code: convert_reinsurance_status_to_code(ReinsuranceStatus::UnderReview)
+            };
+
+            self.reinsurance_setting_txns.write(current_txn_id, new_reinsurance_payment);
+
+            let incremented_txn_id: u256 = current_txn_id + 1;
+
+            self.next_transaction_id.write(incremented_txn_id);
+
+            current_txn_id
+        }
     
         // fn update_reinsurance_premium_payment_detail(
         //     ref self: ContractState,
@@ -1070,435 +1168,3 @@ use starknet::{ ContractAddress, ClassHash };
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-// // treasury_contract.cairo
-// // Reference single-file Cairo contract for treasury management
-// // NOTE: adapt imports to your toolchain if necessary.
-
-// #![feature(concat_idents)]
-// #![no_std]
-// #![allow(unused_imports)]
-
-// // --- Imports (may need to adjust for your Cairo/snforge version) ---
-// use starknet::ContractAddress;
-// use starknet::get_caller_address;
-// use starknet::get_block_timestamp;
-// use core::array::ArrayTrait;
-// use core::integer::u256;
-// use core::option::OptionTrait;
-// use starknet::storage::{
-//     Map,
-// };
-// use core::serde::Serde;
-// use core::result::ResultTrait;
-// use snforge_std::{declare, ContractClassTrait}; // optional
-
-// // --- Types ---
-// #[derive(Copy, Drop, Serde)]
-// pub struct Policy {
-//     pub id: u256,              // policy id
-//     pub owner: ContractAddress,
-//     pub premium: u256,         // premium paid
-//     pub coverage: u256,        // coverage amount
-//     pub expires_at: u64,       // timestamp
-//     pub active: bool,
-// }
-
-// #[derive(Copy, Drop, Serde)]
-// pub struct Claim {
-//     pub id: u256,
-//     pub policy_id: u256,
-//     pub claimant: ContractAddress,
-//     pub amount: u256,
-//     pub timestamp: u64,
-//     pub approved: bool,
-//     pub paid: bool,
-// }
-
-// // Events
-// #[derive(Drop, Serde, starknet::Event)]
-// pub struct PolicyPurchased {
-//     pub policy_id: u256,
-//     pub owner: ContractAddress,
-//     pub premium: u256,
-//     pub coverage: u256,
-// }
-
-// #[derive(Drop, Serde, starknet::Event)]
-// pub struct ClaimSubmitted {
-//     pub claim_id: u256,
-//     pub policy_id: u256,
-//     pub claimant: ContractAddress,
-//     pub amount: u256,
-// }
-
-// #[derive(Drop, Serde, starknet::Event)]
-// pub struct ClaimApproved {
-//     pub claim_id: u256,
-//     pub payout: u256,
-// }
-
-// #[derive(Drop, Serde, starknet::Event)]
-// pub struct Staked {
-//     pub staker: ContractAddress,
-//     pub amount: u256,
-// }
-
-// #[derive(Drop, Serde, starknet::Event)]
-// pub struct Unstaked {
-//     pub staker: ContractAddress,
-//     pub amount: u256,
-// }
-
-// #[derive(Drop, Serde, starknet::Event)]
-// pub struct RewardsDistributed {
-//     pub total: u256,
-// }
-
-// // --- Storage ---
-// // Note: adapt #[storage] annotation for your toolchain (component! or #[storage] used earlier)
-// #[storage]
-// pub struct Storage {
-//     // Counters
-//     pub next_policy_id: u256,
-//     pub next_claim_id: u256,
-
-//     // Core managed maps
-//     pub policies: Map<u256, Policy>,
-//     pub claims: Map<u256, Claim>,
-
-//     // Pools (amounts are u256)
-//     pub claims_reserve: u256,     // funds reserved for claims
-//     pub investor_pool: u256,      // funds staked by investors (risk-bearing)
-//     pub treasury_pool: u256,      // protocol revenue
-
-//     // Investor stakes mapping and withdrawal locks
-//     pub stakes: Map<ContractAddress, u256>,
-//     pub stake_lock_until: Map<ContractAddress, u64>,
-
-//     // Reward accounting
-//     pub pending_rewards: Map<ContractAddress, u256>,
-
-//     // Admin / governance
-//     pub owner: ContractAddress,
-//     pub paused: bool,
-
-//     // Configuration
-//     pub reserve_ratio_bps: u32,   // basis points to claims reserve from premium (e.g 7000 for 70%)
-//     pub investor_ratio_bps: u32,  // share to investors
-//     pub treasury_ratio_bps: u32,  // share to treasury
-//     pub unstake_lock_seconds: u64,
-// }
-
-// // --- Contract implementation ---
-// #[contract]
-// impl TreasuryContract {
-//     #[constructor]
-//     fn constructor(ref self: Storage, owner: ContractAddress) {
-//         self.next_policy_id.write(u256 { low: 1, high: 0 });
-//         self.next_claim_id.write(u256 { low: 1, high: 0 });
-
-//         self.claims_reserve.write(u256 { low: 0, high: 0 });
-//         self.investor_pool.write(u256 { low: 0, high: 0 });
-//         self.treasury_pool.write(u256 { low: 0, high: 0 });
-
-//         self.owner.write(owner);
-//         self.paused.write(false);
-
-//         // defaults: 70% reserve, 20% investor, 10% treasury (bps)
-//         self.reserve_ratio_bps.write(7000u32);
-//         self.investor_ratio_bps.write(2000u32);
-//         self.treasury_ratio_bps.write(1000u32);
-
-//         self.unstake_lock_seconds.write(86400u64); // 1 day by default
-//     }
-
-//     // ---- Helpers ----
-//     fn only_owner(self: @Storage) {
-//         let caller = get_caller_address();
-//         assert!(caller == self.owner.read(), "Only owner");
-//     }
-
-//     fn ensure_not_paused(self: @Storage) {
-//         assert!(!self.paused.read(), "Contract paused");
-//     }
-
-//     // Safe u256 operations helpers (wraps simple ops)
-//     fn u256_add(a: u256, b: u256) -> u256 {
-//         let res = a + b;
-//         res
-//     }
-//     fn u256_sub(a: u256, b: u256) -> u256 {
-//         // assume a >= b for simplicity in this reference
-//         let res = a - b;
-//         res
-//     }
-
-//     // Utility: allocate premium into pools based on basis points
-//     fn allocate_premium(self: @Storage, premium: u256) {
-//         // compute parts: (premium * ratio_bps) / 10000
-//         let reserve_bps = self.reserve_ratio_bps.read();
-//         let investor_bps = self.investor_ratio_bps.read();
-//         let treasury_bps = self.treasury_ratio_bps.read();
-
-//         // NOTE: u256 * u32 requires careful arithmetic; simplified here:
-//         let reserve_part = premium * u256 { low: reserve_bps as u64, high: 0 } / u256 { low: 10000u64, high: 0 };
-//         let investor_part = premium * u256 { low: investor_bps as u64, high: 0 } / u256 { low: 10000u64, high: 0 };
-//         let treasury_part = premium * u256 { low: treasury_bps as u64, high: 0 } / u256 { low: 10000u64, high: 0 };
-
-//         // add to pools
-//         self.claims_reserve.write(self.claims_reserve.read() + reserve_part);
-//         self.investor_pool.write(self.investor_pool.read() + investor_part);
-//         self.treasury_pool.write(self.treasury_pool.read() + treasury_part);
-
-//         // leftover goes to treasury (to handle rounding)
-//         let allocated = reserve_part + investor_part + treasury_part;
-//         if premium > allocated {
-//             let leftover = premium - allocated;
-//             self.treasury_pool.write(self.treasury_pool.read() + leftover);
-//         }
-//     }
-
-//     // ---- Public API ----
-
-//     // Buy policy: user pays premium (assume payment handled off-chain via ERC20 approval + transfer to this contract)
-//     // For simplicity, this function receives 'premium' and 'coverage' values and records policy.
-//     fn buy_policy(
-//         ref self: Storage,
-//         premium: u256,
-//         coverage: u256,
-//         duration_seconds: u64
-//     ) -> u256 {
-//         self.ensure_not_paused();
-//         let caller = get_caller_address();
-
-//         // basic checks
-//         assert!(premium.low > 0u64 || premium.high > 0u64, "Premium must be > 0");
-//         assert!(coverage.low > 0u64 || coverage.high > 0u64, "Coverage must be > 0");
-//         assert!(duration_seconds > 0u64, "Duration required");
-
-//         // create policy
-//         let pid = self.next_policy_id.read();
-//         let now = get_block_timestamp();
-//         let expires = now + duration_seconds;
-
-//         let policy = Policy {
-//             id: pid,
-//             owner: caller,
-//             premium,
-//             coverage,
-//             expires_at: expires,
-//             active: true,
-//         };
-//         self.policies.write(pid, policy);
-
-//         // allocate premium to pools
-//         self.allocate_premium(premium);
-
-//         // increment next id
-//         self.next_policy_id.write(pid + u256 { low: 1, high: 0 });
-
-//         // emit event
-//         self.emit(Event::PolicyPurchased(PolicyPurchased {
-//             policy_id: pid,
-//             owner: caller,
-//             premium,
-//             coverage,
-//         }));
-
-//         pid
-//     }
-
-//     // Submit claim
-//     fn submit_claim(
-//         ref self: Storage,
-//         policy_id: u256,
-//         claim_amount: u256
-//     ) -> u256 {
-//         let caller = get_caller_address();
-//         // load policy
-//         let policy = self.policies.read(policy_id);
-//         // policy must exist and be owned by caller
-//         assert!(policy.owner == caller, "Not policy owner");
-//         assert!(policy.active, "Policy inactive");
-//         // ensure within coverage
-//         assert!(claim_amount <= policy.coverage, "Claim exceeds coverage");
-
-//         let cid = self.next_claim_id.read();
-//         let now = get_block_timestamp();
-
-//         let claim = Claim {
-//             id: cid,
-//             policy_id,
-//             claimant: caller,
-//             amount: claim_amount,
-//             timestamp: now,
-//             approved: false,
-//             paid: false,
-//         };
-
-//         self.claims.write(cid, claim);
-//         self.next_claim_id.write(cid + u256 { low: 1, high: 0 });
-
-//         self.emit(Event::ClaimSubmitted(ClaimSubmitted {
-//             claim_id: cid,
-//             policy_id,
-//             claimant: caller,
-//             amount: claim_amount,
-//         }));
-
-//         cid
-//     }
-
-//     // Approve claim (only owner / governance); after approval, call payout_claim to execute funds
-//     fn approve_claim(ref self: Storage, claim_id: u256) {
-//         self.only_owner();
-//         let mut claim = self.claims.read(claim_id);
-//         assert!(!claim.approved, "Already approved");
-//         claim.approved = true;
-//         self.claims.write(claim_id, claim);
-
-//         // event
-//         self.emit(Event::ClaimApproved(ClaimApproved {
-//             claim_id,
-//             payout: claim.amount,
-//         }));
-//     }
-
-//     // Payout approved claim. This will withdraw from claims_reserve first, then investor_pool if reserve insufficient.
-//     fn payout_claim(ref self: Storage, claim_id: u256) {
-//         self.only_owner(); // admin triggers payout (or this could be automated)
-//         let mut claim = self.claims.read(claim_id);
-//         assert!(claim.approved, "Claim not approved");
-//         assert!(!claim.paid, "Claim already paid");
-
-//         let payout = claim.amount;
-
-//         // ensure pools cover payout: reserve then investor pool
-//         let reserve = self.claims_reserve.read();
-//         if reserve >= payout {
-//             self.claims_reserve.write(reserve - payout);
-//         } else {
-//             // reserve insufficient: use all reserve then draw from investor pool
-//             let remaining = payout - reserve;
-//             self.claims_reserve.write(u256 { low: 0, high: 0 });
-
-//             let inv_pool = self.investor_pool.read();
-//             assert!(inv_pool >= remaining, "Insufficient funds (solvency)");
-//             self.investor_pool.write(inv_pool - remaining);
-//         }
-
-//         // Here you would call transfer to claimant (omitted; use ERC20 transfer or native token transfer)
-//         // transfer_to(claim.claimant, payout);
-
-//         claim.paid = true;
-//         self.claims.write(claim_id, claim);
-//     }
-
-//     // Stake: investor deposits amount (off-chain token transfer assumed; this records stake)
-//     fn stake(ref self: Storage, amount: u256) {
-//         self.ensure_not_paused();
-//         let caller = get_caller_address();
-//         assert!(amount.low > 0u64 || amount.high > 0u64, "Stake amount > 0");
-
-//         // increment stake
-//         let prev = self.stakes.read(caller);
-//         self.stakes.write(caller, prev + amount);
-
-//         // add to investor_pool
-//         self.investor_pool.write(self.investor_pool.read() + amount);
-
-//         // set lock time
-//         let lock_until = get_block_timestamp() + self.unstake_lock_seconds.read();
-//         self.stake_lock_until.write(caller, lock_until);
-
-//         self.emit(Event::Staked { staker: caller, amount });
-//     }
-
-//     // Unstake (after lock). Here we simply mark and reduce pool; withdrawals may be processed off-chain or via ERC20 transfer call.
-//     fn unstake(ref self: Storage, amount: u256) {
-//         let caller = get_caller_address();
-//         let lock_until = self.stake_lock_until.read(caller);
-//         let now = get_block_timestamp();
-//         assert!(now >= lock_until, "Stake locked");
-
-//         let prev = self.stakes.read(caller);
-//         assert!(prev >= amount, "Insufficient stake");
-
-//         self.stakes.write(caller, prev - amount);
-//         // reduce investor_pool
-//         let inv = self.investor_pool.read();
-//         assert!(inv >= amount, "Investor pool underflow");
-//         self.investor_pool.write(inv - amount);
-
-//         // transfer to caller (omitted: do ERC20 transfer)
-//         // transfer_to(caller, amount);
-
-//         self.emit(Event::Unstaked { staker: caller, amount });
-//     }
-
-//     // Distribute rewards (simple proportional distribution from treasury_pool to stakers)
-//     fn distribute_rewards(ref self: Storage) {
-//         self.only_owner();
-
-//         let total_rewards = self.treasury_pool.read();
-//         assert!(total_rewards.low > 0u64 || total_rewards.high > 0u64, "No rewards");
-
-//         // Compute total stakes
-//         // NOTE: Maps don't have direct iteration in this simplistic reference.
-//         // In a production contract you'd keep a ledger array of stakers or
-//         // perform reward distribution off-chain. Here we provide a simplified
-//         // placeholder: move entire treasury to pending_rewards pool for manual distribution.
-//         self.pending_rewards.write(self.owner.read(), total_rewards);
-//         self.treasury_pool.write(u256 { low: 0, high: 0 });
-
-//         self.emit(Event::RewardsDistributed { total: total_rewards });
-//     }
-
-//     // Admin controls
-//     fn set_ratios(ref self: Storage, reserve_bps: u32, investor_bps: u32, treasury_bps: u32) {
-//         self.only_owner();
-//         assert!(reserve_bps + investor_bps + treasury_bps == 10000u32, "Ratios must sum to 10000");
-//         self.reserve_ratio_bps.write(reserve_bps);
-//         self.investor_ratio_bps.write(investor_bps);
-//         self.treasury_ratio_bps.write(treasury_bps);
-//     }
-
-//     fn pause_underwriting(ref self: Storage) {
-//         self.only_owner();
-//         self.paused.write(true);
-//     }
-//     fn resume_underwriting(ref self: Storage) {
-//         self.only_owner();
-//         self.paused.write(false);
-//     }
-
-//     // Getters
-//     fn get_pools(self: @Storage) -> (u256, u256, u256) {
-//         (self.claims_reserve.read(), self.investor_pool.read(), self.treasury_pool.read())
-//     }
-
-//     fn get_policy(self: @Storage, pid: u256) -> Policy {
-//         self.policies.read(pid)
-//     }
-
-//     fn get_claim(self: @Storage, cid: u256) -> Claim {
-//         self.claims.read(cid)
-//     }
-
-//     fn get_stake(self: @Storage, staker: ContractAddress) -> u256 {
-//         self.stakes.read(staker)
-//     }
-// }

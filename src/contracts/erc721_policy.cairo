@@ -301,7 +301,9 @@ pub mod PolicyNFT {
             premium_frequency_code: u8,
             frequency_factor: u8,
             update_type_code: u8,
-            endorsement_amount: u256
+            endorsement_amount: u256,
+            has_reinsurance: bool,
+            reinsurance_txn_id: u256
         ) {
 
             let current_policy_data: PolicyData = self.policy_details.read(token_id);
@@ -333,8 +335,8 @@ pub mod PolicyNFT {
                         is_expired: current_policy_data.is_expired,
                         claims_count: current_policy_data.claims_count,
                         has_claimed: current_policy_data.has_claimed,
-                        has_reinsurance: current_policy_data.has_reinsurance,
-                        reinsurance_txn_id: current_policy_data.reinsurance_txn_id,
+                        has_reinsurance: has_reinsurance,
+                        reinsurance_txn_id: reinsurance_txn_id,
                         aggregate_claim_amount: current_policy_data.aggregate_claim_amount     
                     },
                 1 => PolicyData {
@@ -353,8 +355,8 @@ pub mod PolicyNFT {
                         is_expired: current_policy_data.is_expired,
                         claims_count: current_policy_data.claims_count,
                         has_claimed: current_policy_data.has_claimed,
-                        has_reinsurance: current_policy_data.has_reinsurance,
-                        reinsurance_txn_id: current_policy_data.reinsurance_txn_id,
+                        has_reinsurance: has_reinsurance,
+                        reinsurance_txn_id: reinsurance_txn_id,
                         aggregate_claim_amount: current_policy_data.aggregate_claim_amount     
                     },
                 _ => current_policy_data

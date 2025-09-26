@@ -21,6 +21,8 @@ pub trait IProposalForm<TContractState> {
         sum_insured: u256,
         premium_frequency_code: u8,
         frequency_factor: u8,
+        has_reinsurance: bool,
+        reinsurance_txn_id: u256
     );
     fn get_proposal_by_id(
         self: @TContractState,
@@ -118,7 +120,9 @@ pub trait IPolicyNFT<TContractState> {
         premium_frequency_code: u8,
         frequency_factor: u8,
         update_type_code: u8,
-        endorsement_amount: u256
+        endorsement_amount: u256,
+        has_reinsurance: bool,
+        reinsurance_txn_id: u256
     );
     fn add_claim_to_policy(
         ref self: TContractState,
@@ -402,18 +406,18 @@ pub trait ITreasuryManagement<TContractState> {
         transaction_id: u256
     ) -> PurchaseVotingCommitmentResponse;
 
-    // fn initiate_reinsurance_premium_payment(
-    //     ref self: TContractState,
-    //     insured_proposal_id: u256,
-    //     insured_policy_id: u256,
-    //     reinsurer_id: u256,
-    //     reinsurance_payment_address: ContractAddress,
-    //     percentage_reinsurance: u16,
-    //     gross_sum_insured: u256,
-    //     ceded_sum_insured: u256,
-    //     gross_premium: u256,
-    //     ceded_premium: u256,
-    // ) -> u256;
+    fn initiate_reinsurance_premium_payment(
+        ref self: TContractState,
+        insured_proposal_id: u256,
+        insured_policy_id: u256,
+        reinsurer_id: u256,
+        reinsurance_payment_address: ContractAddress,
+        percentage_reinsurance: u16,
+        gross_sum_insured: u256,
+        ceded_sum_insured: u256,
+        gross_premium: u256,
+        ceded_premium: u256,
+    ) -> u256;
 
     // fn update_reinsurance_premium_payment_detail(
     //     ref self: TContractState,
