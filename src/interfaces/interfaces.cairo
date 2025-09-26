@@ -419,19 +419,19 @@ pub trait ITreasuryManagement<TContractState> {
         ceded_premium: u256,
     ) -> u256;
 
-    // fn update_reinsurance_premium_payment_detail(
-    //     ref self: TContractState,
-    //     transaction_id: u256,
-    //     txn_hash: ByteArray,
-    //     reinsurance_doc_url: ByteArray,
-    //     payment_status_code: u8,
-    //     reinsurance_status_code: u8
-    // );
+    fn update_reinsurance_premium_payment_detail(
+        ref self: TContractState,
+        transaction_id: u256,
+        txn_hash: felt252,
+        reinsurance_doc_url: ByteArray,
+        payment_status_code: u8,
+        reinsurance_status_code: u8
+    );
 
-    // fn get_reinsurance_premium_payment_detail(
-    //     self: @TContractState,
-    //     transaction_id: u256
-    // ) -> CreditReinsuranceResponse;
+    fn get_reinsurance_premium_payment_detail(
+        self: @TContractState,
+        transaction_id: u256
+    ) -> CreditReinsuranceResponse;
 
     // fn initiate_claim_recovery_from_reinsurance(
     //     ref self: TContractState,

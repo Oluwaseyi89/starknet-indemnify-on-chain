@@ -1,6 +1,7 @@
 #[starknet::contract]
 pub mod TreasuryManagement {
     // use crate::contracts::erc721_policy::PolicyNFT::Event;
+use crate::structs::structs::CreditReinsurance;
 use crate::enums::enums::PaymentStatus;
 use crate::structs::structs::NativeTokenPurchase;
 use crate::utils::utils::convert_payment_code_to_status;
@@ -1013,23 +1014,73 @@ use starknet::{ ContractAddress, ClassHash };
             current_txn_id
         }
     
-        // fn update_reinsurance_premium_payment_detail(
-        //     ref self: ContractState,
-        //     transaction_id: u256,
-        //     txn_hash: ByteArray,
-        //     reinsurance_doc_url: ByteArray,
-        //     payment_status_code: u8,
-        //     reinsurance_status_code: u8
-        // ) {
+        fn update_reinsurance_premium_payment_detail(
+            ref self: ContractState,
+            transaction_id: u256,
+            txn_hash: felt252,
+            reinsurance_doc_url: ByteArray,
+            payment_status_code: u8,
+            reinsurance_status_code: u8
+        ) {
 
-        // }
+            let updateable_txn: CreditReinsurance = self.reinsurance_setting_txns.read(transaction_id);
+
+            let current_time: u64 = get_block_timestamp();
+
+            let updated_txn: CreditReinsurance = CreditReinsurance {
+                transaction_id: transaction_id,
+                insured_proposal_id: updateable_txn.insured_proposal_id,
+                insured_policy_id: updateable_txn.insured_policy_id,
+                insured: updateable_txn.insured,
+                reinsurer_id: updateable_txn.reinsurer_id,
+                reinsurance_payment_address: updateable_txn.reinsurance_payment_address,
+                reinsurer_name: updateable_txn.reinsurer_name,
+                percentage_reinsurance: updateable_txn.percentage_reinsurance,
+                gross_sum_insured: updateable_txn.gross_sum_insured,
+                ceded_sum_insured: updateable_txn.ceded_sum_insured,
+                gross_premium: updateable_txn.gross_premium,
+                ceded_premium: updateable_txn.ceded_premium,
+                payment_date: updateable_txn.payment_date,
+                updated_at: current_time,
+                txn_hash: txn_hash,
+                reinsurance_doc_url: reinsurance_doc_url,
+                payment_status_code: payment_status_code,
+                reinsurance_status_code: reinsurance_status_code
+            };
+
+            self.reinsurance_setting_txns.write(transaction_id, updated_txn);
+        }
     
-        // fn get_reinsurance_premium_payment_detail(
-        //     self: @ContractState,
-        //     transaction_id: u256
-        // ) -> CreditReinsuranceResponse {
+        fn get_reinsurance_premium_payment_detail(
+            self: @ContractState,
+            transaction_id: u256
+        ) -> CreditReinsuranceResponse {
 
-        // }
+            let sought_txn: CreditReinsurance = self.reinsurance_setting_txns.read(transaction_id);
+
+            let response_obj: CreditReinsuranceResponse = CreditReinsuranceResponse {
+                transaction_id: transaction_id,
+                insured_proposal_id: sought_txn.insured_proposal_id,
+                insured_policy_id: sought_txn.insured_policy_id,
+                insured: sought_txn.insured,
+                reinsurer_id: sought_txn.reinsurer_id,
+                reinsurance_payment_address: sought_txn.reinsurance_payment_address,
+                reinsurer_name: sought_txn.reinsurer_name,
+                percentage_reinsurance: sought_txn.percentage_reinsurance,
+                gross_sum_insured: sought_txn.gross_sum_insured,
+                ceded_sum_insured: sought_txn.ceded_sum_insured,
+                gross_premium: sought_txn.gross_premium,
+                ceded_premium: sought_txn.ceded_premium,
+                payment_date: sought_txn.payment_date,
+                updated_at: sought_txn.updated_at,
+                txn_hash: sought_txn.txn_hash,
+                reinsurance_doc_url: sought_txn.reinsurance_doc_url,
+                payment_status: convert_payment_code_to_status(sought_txn.payment_status_code),
+                reinsurance_status: convert_reinsurance_status_code_to_status(sought_txn.reinsurance_status_code)
+            };
+
+            response_obj
+        }
     
         // fn initiate_claim_recovery_from_reinsurance(
         //     ref self: ContractState,
