@@ -117,7 +117,9 @@ use starknet::{ ContractAddress, ClassHash };
         //By transaction_id --- Credits Starknet-Indemnify STINDEM Balance
         vote_right_payments: Map<u256, PurchaseVotingCommitment>,
         //Set Reinsurances by Transaction IDs
-        reinsurance_setting_txns: Map<u256, CreditReinsurance>,                                                                                                                                                                                                                                                
+        reinsurance_setting_txns: Map<u256, CreditReinsurance>, 
+        //Recover Reinsurance to settle reinsured risks claims
+        reinsurance_recovery_txns: Map<u256, DebitReinsurance>,                                                                                                                                                                                                                                               
         //Current balance of Investors' fund
         investors_fund_balance: u256,
         gross_premium_written: u256,
@@ -1082,19 +1084,61 @@ use starknet::{ ContractAddress, ClassHash };
             response_obj
         }
     
-        // fn initiate_claim_recovery_from_reinsurance(
-        //     ref self: ContractState,
-        //     reinsurance_payment_id: u256,
-        //     insured_proposal_id: u256,
-        //     insured_policy_id: u256,
-        //     claim_id: u256,
-        //     insured: ContractAddress,
-        //     reinsurer_id: u256,
-        //     reinsurance_payment_address: ContractAddress,
-        //     gross_claim_amount: u256,
-        // ) -> u256 {
+        fn initiate_claim_recovery_from_reinsurance(
+            ref self: ContractState,
+            reinsurance_payment_id: u256,
+            insured_proposal_id: u256,
+            insured_policy_id: u256,
+            claim_id: u256,
+            insured: ContractAddress,
+            reinsurer_id: u256,
+            reinsurance_payment_address: ContractAddress,
+            gross_claim_amount: u256,
+        ) -> u256 {
+            
+            let current_txn_id: u256 = self.next_transaction_id.read();
 
-        // }
+            let reinsurance_payment_obj: CreditReinsurance = self.reinsurance_setting_txns.read(reinsurance_payment_id);
+            let reinsurer_obj: Reinsurer = self.reinsurers.read(reinsurer_id);
+
+            let apportioned_claim: u256 = reinsurance_payment_obj.percentage_reinsurance.into() * gross_claim_amount;
+
+            let current_time: u64 = get_block_timestamp();
+
+            let new_txn: DebitReinsurance = DebitReinsurance {
+                transaction_id: current_txn_id,
+                reinsurance_payment_id: reinsurance_payment_id,
+                insured_proposal_id: insured_proposal_id,
+                insured_policy_id: insured_policy_id,
+                claim_id: claim_id,
+                insured: insured,
+                reinsurer_id: reinsurer_id,
+                reinsurance_payment_address: reinsurance_payment_address,
+                reinsurer_name: reinsurer_obj.reinsurer_name,
+                percentage_reinsurance: reinsurance_payment_obj.percentage_reinsurance,
+                gross_sum_insured: reinsurance_payment_obj.gross_sum_insured,
+                ceded_sum_insured: reinsurance_payment_obj.ceded_sum_insured,
+                gross_premium: reinsurance_payment_obj.gross_premium,
+                ceded_premium: reinsurance_payment_obj.ceded_premium,
+                gross_claim_amount: gross_claim_amount,
+                reinsurance_claim_apportionment: apportioned_claim,
+                settlement_date: current_time,
+                updated_at: current_time,
+                txn_hash: '',
+                reinsurance_doc_url: "",
+                claim_discharge_voucher_url: "",
+                settlement_status_code: convert_payment_status_to_code(PaymentStatus::Pending),
+                reinsurance_status_code: convert_reinsurance_status_to_code(ReinsuranceStatus::Initiated)
+            };
+
+            self.reinsurance_recovery_txns.write(current_txn_id, new_txn);
+
+            let incremented_txn_id: u256 = current_txn_id + 1;
+
+            self.next_transaction_id.write(incremented_txn_id);
+
+            current_txn_id
+        }
     
         // fn update_claim_recovery_from_reinsurance(
         //     ref self: ContractState,

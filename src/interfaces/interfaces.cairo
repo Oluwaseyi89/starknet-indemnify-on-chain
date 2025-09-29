@@ -433,17 +433,17 @@ pub trait ITreasuryManagement<TContractState> {
         transaction_id: u256
     ) -> CreditReinsuranceResponse;
 
-    // fn initiate_claim_recovery_from_reinsurance(
-    //     ref self: TContractState,
-    //     reinsurance_payment_id: u256,
-    //     insured_proposal_id: u256,
-    //     insured_policy_id: u256,
-    //     claim_id: u256,
-    //     insured: ContractAddress,
-    //     reinsurer_id: u256,
-    //     reinsurance_payment_address: ContractAddress,
-    //     gross_claim_amount: u256,
-    // ) -> u256;
+    fn initiate_claim_recovery_from_reinsurance(
+        ref self: TContractState,
+        reinsurance_payment_id: u256,
+        insured_proposal_id: u256,
+        insured_policy_id: u256,
+        claim_id: u256,
+        insured: ContractAddress,
+        reinsurer_id: u256,
+        reinsurance_payment_address: ContractAddress,
+        gross_claim_amount: u256,
+    ) -> u256;
 
     // fn update_claim_recovery_from_reinsurance(
     //     ref self: TContractState,
