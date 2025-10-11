@@ -1430,6 +1430,266 @@ use starknet::{ ContractAddress, ClassHash };
         ) -> ContractAddress {
             self.claims_contract_address.read()
         }
+
+
+
+fn set_stindem_token_address(
+    ref self: ContractState,
+    stindem_token_address: ContractAddress
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.stindem_token_address.write(stindem_token_address);
+}
+
+fn get_stindem_token_address(
+    self: @ContractState,
+) -> ContractAddress {
+    self.stindem_token_address.read()
+}
+
+fn set_current_stindem_to_strk_value(
+    ref self: ContractState,
+    value: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.current_stindem_to_strk_value.write(value);
+}
+
+fn get_current_stindem_to_strk_value(
+    self: @ContractState,
+) -> u256 {
+    self.current_stindem_to_strk_value.read()
+}
+
+fn set_current_stindem_to_eth_value(
+    ref self: ContractState,
+    value: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.current_stindem_to_eth_value.write(value);
+}
+
+fn get_current_stindem_to_eth_value(
+    self: @ContractState,
+) -> u256 {
+    self.current_stindem_to_eth_value.read()
+}
+
+fn set_current_stindem_to_btc_value(
+    ref self: ContractState,
+    value: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.current_stindem_to_btc_value.write(value);
+}
+
+fn get_current_stindem_to_btc_value(
+    self: @ContractState,
+) -> u256 {
+    self.current_stindem_to_btc_value.read()
+}
+
+fn set_current_stindem_to_usd_value(
+    ref self: ContractState,
+    value: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.current_stindem_to_usd_value.write(value);
+}
+
+fn get_current_stindem_to_usd_value(
+    self: @ContractState,
+) -> u256 {
+    self.current_stindem_to_usd_value.read()
+}
+
+fn set_current_strk_to_usd_value(
+    ref self: ContractState,
+    value: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.current_strk_to_usd_value.write(value);
+}
+
+fn get_current_strk_to_usd_value(
+    self: @ContractState,
+) -> u256 {
+    self.current_strk_to_usd_value.read()
+}
+
+fn set_current_strk_to_eth_value(
+    ref self: ContractState,
+    value: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.current_strk_to_eth_value.write(value);
+}
+
+fn get_current_strk_to_eth_value(
+    self: @ContractState,
+) -> u256 {
+    self.current_strk_to_eth_value.read()
+}
+
+fn set_current_strk_to_btc_value(
+    ref self: ContractState,
+    value: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.current_strk_to_btc_value.write(value);
+}
+
+fn get_current_strk_to_btc_value(
+    self: @ContractState,
+) -> u256 {
+    self.current_strk_to_btc_value.read()
+}
+
+fn set_starknet_indemnify_usd_balance(
+    ref self: ContractState,
+    balance: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.starknet_indemnify_usd_balance.write(balance);
+}
+
+fn get_starknet_indemnify_usd_balance(
+    self: @ContractState,
+) -> u256 {
+    self.starknet_indemnify_usd_balance.read()
+}
+
+fn set_starknet_indemnify_strk_balance(
+    ref self: ContractState,
+    balance: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.starknet_indemnify_strk_balance.write(balance);
+}
+
+fn get_starknet_indemnify_strk_balance(
+    self: @ContractState,
+) -> u256 {
+    self.starknet_indemnify_strk_balance.read()
+}
+
+fn set_starknet_indemnify_stindem_balance(
+    ref self: ContractState,
+    balance: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.starknet_indemnify_stindem_balance.write(balance);
+}
+
+fn get_starknet_indemnify_stindem_balance(
+    self: @ContractState,
+) -> u256 {
+    self.starknet_indemnify_stindem_balance.read()
+}
+
+fn set_starknet_indemnify_eth_balance(
+    ref self: ContractState,
+    balance: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.starknet_indemnify_eth_balance.write(balance);
+}
+
+fn get_starknet_indemnify_eth_balance(
+    self: @ContractState,
+) -> u256 {
+    self.starknet_indemnify_eth_balance.read()
+}
+
+fn set_starknet_indemnify_btc_balance(
+    ref self: ContractState,
+    balance: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.starknet_indemnify_btc_balance.write(balance);
+}
+
+fn get_starknet_indemnify_btc_balance(
+    self: @ContractState,
+) -> u256 {
+    self.starknet_indemnify_btc_balance.read()
+}
+
+
+fn set_stindem_qty_to_vote(
+    ref self: ContractState,
+    quantity: u256
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.stindem_qty_to_vote.write(quantity);
+}
+
+fn get_stindem_qty_to_vote(
+    self: @ContractState,
+) -> u256 {
+    self.stindem_qty_to_vote.read()
+}
+
+
+fn set_strk_contract_address(
+    ref self: ContractState,
+    strk_contract_address: ContractAddress
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.strk_contract_address.write(strk_contract_address);
+}
+
+fn get_strk_contract_address(
+    self: @ContractState,
+) -> ContractAddress {
+    self.strk_contract_address.read()
+}
+
+
+fn set_starknet_indemnify_treasury_account(
+    ref self: ContractState,
+    treasury_account: ContractAddress
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.starknet_indemnify_treasury_account.write(treasury_account);
+}
+
+fn get_starknet_indemnify_treasury_account(
+    self: @ContractState,
+) -> ContractAddress {
+    self.starknet_indemnify_treasury_account.read()
+}
+
+fn set_starknet_indemnify_stindem_treasury(
+    ref self: ContractState,
+    stindem_treasury: ContractAddress
+) {
+    let caller: ContractAddress = get_caller_address();
+    assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+    self.starknet_indemnify_stindem_treasury.write(stindem_treasury);
+}
+
+fn get_starknet_indemnify_stindem_treasury(
+    self: @ContractState,
+) -> ContractAddress {
+    self.starknet_indemnify_stindem_treasury.read()
+}
     
     }
 

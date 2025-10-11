@@ -527,6 +527,166 @@ pub trait ITreasuryManagement<TContractState> {
         self: @TContractState,
     ) -> ContractAddress;
 
+        
+    // STINDEM token address
+fn set_stindem_token_address(
+    ref self: TContractState,
+    stindem_token_address: ContractAddress
+);
+
+fn get_stindem_token_address(
+    self: @TContractState,
+) -> ContractAddress;
+
+// Conversion rates
+fn set_current_stindem_to_strk_value(
+    ref self: TContractState,
+    value: u256
+);
+
+fn get_current_stindem_to_strk_value(
+    self: @TContractState,
+) -> u256;
+
+fn set_current_stindem_to_eth_value(
+    ref self: TContractState,
+    value: u256
+);
+
+fn get_current_stindem_to_eth_value(
+    self: @TContractState,
+) -> u256;
+
+fn set_current_stindem_to_btc_value(
+    ref self: TContractState,
+    value: u256
+);
+
+fn get_current_stindem_to_btc_value(
+    self: @TContractState,
+) -> u256;
+
+fn set_current_stindem_to_usd_value(
+    ref self: TContractState,
+    value: u256
+);
+
+fn get_current_stindem_to_usd_value(
+    self: @TContractState,
+) -> u256;
+
+fn set_current_strk_to_usd_value(
+    ref self: TContractState,
+    value: u256
+);
+
+fn get_current_strk_to_usd_value(
+    self: @TContractState,
+) -> u256;
+
+fn set_current_strk_to_eth_value(
+    ref self: TContractState,
+    value: u256
+);
+
+fn get_current_strk_to_eth_value(
+    self: @TContractState,
+) -> u256;
+
+fn set_current_strk_to_btc_value(
+    ref self: TContractState,
+    value: u256
+);
+
+fn get_current_strk_to_btc_value(
+    self: @TContractState,
+) -> u256;
+
+// Currency balances
+fn set_starknet_indemnify_usd_balance(
+    ref self: TContractState,
+    balance: u256
+);
+
+fn get_starknet_indemnify_usd_balance(
+    self: @TContractState,
+) -> u256;
+
+fn set_starknet_indemnify_strk_balance(
+    ref self: TContractState,
+    balance: u256
+);
+
+fn get_starknet_indemnify_strk_balance(
+    self: @TContractState,
+) -> u256;
+
+fn set_starknet_indemnify_stindem_balance(
+    ref self: TContractState,
+    balance: u256
+);
+
+fn get_starknet_indemnify_stindem_balance(
+    self: @TContractState,
+) -> u256;
+
+fn set_starknet_indemnify_eth_balance(
+    ref self: TContractState,
+    balance: u256
+);
+
+fn get_starknet_indemnify_eth_balance(
+    self: @TContractState,
+) -> u256;
+
+fn set_starknet_indemnify_btc_balance(
+    ref self: TContractState,
+    balance: u256
+);
+
+fn get_starknet_indemnify_btc_balance(
+    self: @TContractState,
+) -> u256;
+
+// Voting quantity
+fn set_stindem_qty_to_vote(
+    ref self: TContractState,
+    quantity: u256
+);
+
+fn get_stindem_qty_to_vote(
+    self: @TContractState,
+) -> u256;
+
+// STRK contract address
+fn set_strk_contract_address(
+    ref self: TContractState,
+    strk_contract_address: ContractAddress
+);
+
+fn get_strk_contract_address(
+    self: @TContractState,
+) -> ContractAddress;
+
+// Treasury accounts
+fn set_starknet_indemnify_treasury_account(
+    ref self: TContractState,
+    treasury_account: ContractAddress
+);
+
+fn get_starknet_indemnify_treasury_account(
+    self: @TContractState,
+) -> ContractAddress;
+
+fn set_starknet_indemnify_stindem_treasury(
+    ref self: TContractState,
+    stindem_treasury: ContractAddress
+);
+
+fn get_starknet_indemnify_stindem_treasury(
+    self: @TContractState,
+) -> ContractAddress;
+
 }
 
 
