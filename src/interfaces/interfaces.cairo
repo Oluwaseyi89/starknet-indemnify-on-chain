@@ -491,41 +491,41 @@ pub trait ITreasuryManagement<TContractState> {
     //     reinsurer_id: u256
     // ) -> ReinsurerResponse;
 
-    // fn set_proposal_form_address(
-    //     ref self: TContractState,
-    //     proposal_form_address: ContractAddress
-    // );
+    fn set_proposal_form_address(
+        ref self: TContractState,
+        proposal_form_address: ContractAddress
+    );
 
-    // fn get_proposal_form_address(
-    //     self: @TContractState,
-    // ) -> ContractAddress;
+    fn get_proposal_form_address(
+        self: @TContractState,
+    ) -> ContractAddress;
 
-    // fn set_policy_minting_address(
-    //     ref self: TContractState,
-    //     policy_minting_address: ContractAddress
-    // );
+    fn set_policy_minting_address(
+        ref self: TContractState,
+        policy_minting_address: ContractAddress
+    );
 
-    // fn get_policy_minting_address(
-    //     self: @TContractState,
-    // ) -> ContractAddress;
+    fn get_policy_minting_address(
+        self: @TContractState,
+    ) -> ContractAddress;
 
-    // fn set_governance_address(
-    //     ref self: TContractState,
-    //     governance_address: ContractAddress
-    // );
+    fn set_governance_address(
+        ref self: TContractState,
+        governance_address: ContractAddress
+    );
 
-    // fn get_governance_address(
-    //     self: @TContractState,
-    // ) -> ContractAddress;
+    fn get_governance_address(
+        self: @TContractState,
+    ) -> ContractAddress;
 
-    // fn set_claims_contract_address(
-    //     ref self: TContractState,
-    //     claims_contract_address: ContractAddress
-    // );
+    fn set_claims_contract_address(
+        ref self: TContractState,
+        claims_contract_address: ContractAddress
+    );
 
-    // fn get_claims_contract_address(
-    //     self: @TContractState,
-    // ) -> ContractAddress;
+    fn get_claims_contract_address(
+        self: @TContractState,
+    ) -> ContractAddress;
 
 }
 

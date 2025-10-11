@@ -1,14 +1,5 @@
 #[starknet::contract]
 pub mod TreasuryManagement {
-    // use crate::contracts::erc721_policy::PolicyNFT::Event;
-use crate::structs::structs::CreditReinsurance;
-use crate::enums::enums::PaymentStatus;
-use crate::structs::structs::NativeTokenPurchase;
-use crate::utils::utils::convert_payment_code_to_status;
-use crate::structs::structs::PremiumPaymentResponse;
-use crate::interfaces::interfaces::IPolicyNFTDispatcher;
-use crate::interfaces::interfaces::IProposalFormDispatcher;
-use crate::structs::structs::ClaimPayment;
 use starknet::{ ContractAddress, ClassHash };
     use starknet::{
         get_caller_address,
@@ -52,6 +43,8 @@ use starknet::{ ContractAddress, ClassHash };
       const TREASURY_MANAGER_ROLE: felt252 = selector!("TREASURY_MANAGER_ROLE");
       const TREASURY_GUARDIAN_ROLE: felt252 = selector!("TREASURY_GUARDIAN_ROLE");
       const DEFAULT_ADMIN_ROLE: felt252 = selector!("DEFAULT_ADMIN_ROLE");
+      const ADMIN_ROLE: felt252 = selector!("ADMIN_ROLE");
+
   
       // Withdrawal proposal status
       const STATUS_PENDING: felt252 = selector!("STATUS_PENDING");
@@ -177,7 +170,38 @@ use starknet::{ ContractAddress, ClassHash };
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
         #[flat]
-        SRC5Event: SRC5Component::Event
+        SRC5Event: SRC5Component::Event,
+
+        PremiumPaymentSuccess: PremiumPaymentSuccess,
+    
+        // Add the new premium payment events
+        PremiumPaymentRecorded: PremiumPaymentRecorded,
+        PremiumPaymentUpdated: PremiumPaymentUpdated,
+        
+          // Add the new claim payment events
+        ClaimPaymentExecuted: ClaimPaymentExecuted,
+        ClaimPaymentUpdated: ClaimPaymentUpdated,
+        
+        // Your existing claim events
+        ClaimSubmitted: ClaimSubmitted,
+        ClaimUpdated: ClaimUpdated,
+        ClaimApproved: ClaimApproved,
+        ClaimRepudiated: ClaimRepudiated,
+        ClaimPaid: ClaimPaid,
+        ClaimEscalated: ClaimEscalated,
+        
+        ///Stindem purchase events
+        StindemPurchased: StindemPurchased,
+        StindemPurchaseUpdated: StindemPurchaseUpdated,
+
+        ///Stindem recovery event
+        StindemRecovered: StindemRecovered,
+        StindemRecoveryUpdated: StindemRecoveryUpdated,
+        
+           // Add the new voting commitment events
+        VotingCommitmentPurchased: VotingCommitmentPurchased,
+        VotingCommitmentUpdated: VotingCommitmentUpdated,
+    
     }
     
 
@@ -191,16 +215,14 @@ use starknet::{ ContractAddress, ClassHash };
     fn constructor(
         ref self: ContractState,
         admin: ContractAddress,
-        manager: ContractAddress,
-        guardian: ContractAddress,
-        timelock_duration: u64
     ) {
         // Initialize OpenZeppelin components
         self.accesscontrol.initializer();
         // Setup roles
         self.accesscontrol._grant_role(DEFAULT_ADMIN_ROLE, admin);
-        self.accesscontrol._grant_role(TREASURY_MANAGER_ROLE, manager);
-        self.accesscontrol._grant_role(TREASURY_GUARDIAN_ROLE, guardian);
+        self.accesscontrol._grant_role(ADMIN_ROLE, admin);
+
+    
 
         self.next_transaction_id.write(1);
         self.next_reinsurer_id.write(1);
@@ -296,6 +318,33 @@ use starknet::{ ContractAddress, ClassHash };
 
             self.next_transaction_id.write(incremented_txn_id);
 
+
+             // Emit PremiumPaymentRecorded event
+            let premium_payment_event: PremiumPaymentRecorded = PremiumPaymentRecorded {
+                transaction_id: current_txn_id,
+                proposal_id: proposal_id,
+                policy_id: new_policy_id,
+                payer_address: payer_address,
+                policyholder: proposal_obj.proposer,
+                amount_paid: actual_premium_payable,
+                sum_insured: proposal_obj.sum_insured,
+                payment_date: current_time,
+                txn_hash: txn_hash
+            };
+            self.emit(premium_payment_event);
+
+            // Also emit the existing PremiumPaymentSuccess event for backward compatibility
+            let payment_success_event: PremiumPaymentSuccess = PremiumPaymentSuccess {
+                proposal_id: proposal_id,
+                policyholder: proposal_obj.proposer,
+                payer: payer_address,
+                amount: actual_premium_payable,
+                policy_token_id: new_policy_id, // Assuming this is the same as policy_id
+                policy_id: new_policy_id
+            };
+            self.emit(payment_success_event);
+
+
              current_txn_id
         }
     
@@ -326,6 +375,16 @@ use starknet::{ ContractAddress, ClassHash };
             };
 
             self.premiums.write(transaction_id, updated_premium_payment);
+
+             // Emit PremiumPaymentUpdated event
+            let premium_update_event: PremiumPaymentUpdated = PremiumPaymentUpdated {
+                transaction_id: transaction_id,
+                policy_id: policy_id,
+                txn_hash: txn_hash,
+                payment_status: convert_payment_code_to_status(payment_status_code),
+                updated_at: current_time
+            };
+            self.emit(premium_update_event);
 
         }
     
@@ -442,6 +501,31 @@ use starknet::{ ContractAddress, ClassHash };
 
             self.next_transaction_id.write(incremented_txn_id);
 
+
+             // Emit ClaimPaymentExecuted event
+            let claim_payment_event: ClaimPaymentExecuted = ClaimPaymentExecuted {
+                transaction_id: current_txn_id,
+                policy_id: policy_id,
+                claim_id: claim_id,
+                policyholder: policyholder,
+                third_party_account: third_party_account,
+                claim_amount: claim_obj.claim_amount,
+                approved_settlement_amount: claim_obj.approved_settlement_amount,
+                settlement_date: current_time,
+                txn_hash: txn_hash,
+                settlement_source: convert_claims_settlement_source_code_to_source(settlement_source_code)
+            };
+            self.emit(claim_payment_event);
+
+            // Also emit the existing ClaimPaid event for backward compatibility
+            let claim_paid_event: ClaimPaid = ClaimPaid {
+                claim_id: claim_id,
+                recipient: policyholder,
+                amount: payable_claim_amount,
+                tx_hash: txn_hash
+            };
+            self.emit(claim_paid_event);
+
             current_txn_id
         }
     
@@ -475,6 +559,20 @@ use starknet::{ ContractAddress, ClassHash };
             };
 
             self.claim_payments.write(transaction_id, updated_claim);
+
+            // Emit ClaimPaymentUpdated event
+            let claim_update_event: ClaimPaymentUpdated = ClaimPaymentUpdated {
+                transaction_id: transaction_id,
+                policy_id: claim_to_update.policy_id,
+                claim_id: claim_to_update.claim_id,
+                policyholder: claim_to_update.policyholder,
+                third_party_account: third_party_account,
+                settlement_status: convert_payment_code_to_status(settlement_status_code),
+                settlement_source: convert_claims_settlement_source_code_to_source(settlement_source_code),
+                updated_at: current_time,
+                txn_hash: txn_hash
+            };
+            self.emit(claim_update_event);
         }
     
         fn get_claim_payment(
@@ -585,6 +683,20 @@ use starknet::{ ContractAddress, ClassHash };
 
             self.next_transaction_id.write(incremented_txn_id);
 
+               // Emit StindemPurchased event
+            let stindem_purchase_event: StindemPurchased = StindemPurchased {
+                transaction_id: current_txn_id,
+                buyer_address: buyer_address,
+                seller_address: stindem_treasury,
+                token_address: self.stindem_token_address.read(),
+                quantity: quantity,
+                unit_price: unit_price_of_stindem_in_strk,
+                total_price_paid: amount_of_strk_to_bill,
+                payment_date: current_time,
+                txn_hash: txn_hash
+            };
+            self.emit(stindem_purchase_event);
+
             current_txn_id
 
         }
@@ -615,6 +727,18 @@ use starknet::{ ContractAddress, ClassHash };
             };
 
             self.native_token_purchases.write(transaction_id, updated_txn);
+
+              // Emit StindemPurchaseUpdated event
+            let stindem_update_event: StindemPurchaseUpdated = StindemPurchaseUpdated {
+                transaction_id: transaction_id,
+                buyer_address: updateable_txn.buyer_address,
+                token_address: updateable_txn.token_address,
+                quantity: updateable_txn.quantity,
+                payment_status: convert_payment_code_to_status(payment_status_code),
+                updated_at: current_time,
+                txn_hash: txn_hash
+            };
+            self.emit(stindem_update_event);
         }
     
         fn get_stindem_purchase_detail(
@@ -722,6 +846,21 @@ use starknet::{ ContractAddress, ClassHash };
 
             self.next_transaction_id.write(incremented_txn_id);
 
+               // Emit StindemRecovered event
+            let stindem_recovery_event: StindemRecovered = StindemRecovered {
+                transaction_id: current_txn_id,
+                seller_address: seller_address,
+                buyer_address: treasury_account,
+                stindem_token_address: self.stindem_token_address.read(),
+                strk_token_address: self.strk_contract_address.read(),
+                stindem_quantity: quantity,
+                strk_amount_paid: amount_of_strk_to_bill,
+                unit_price: unit_price_of_stindem_in_strk,
+                recovery_date: current_time,
+                txn_hash: txn_hash
+            };
+            self.emit(stindem_recovery_event);
+
             current_txn_id
 
         }
@@ -753,6 +892,18 @@ use starknet::{ ContractAddress, ClassHash };
             };
 
             self.native_token_recoveries.write(transaction_id, updated_txn);
+
+             // Emit StindemRecoveryUpdated event
+            let stindem_recovery_update_event: StindemRecoveryUpdated = StindemRecoveryUpdated {
+                transaction_id: transaction_id,
+                seller_address: updateable_txn.seller_address,
+                stindem_quantity: updateable_txn.quantity,
+                strk_amount_paid: updateable_txn.total_price_paid,
+                payment_status: convert_payment_code_to_status(payment_status_code),
+                updated_at: current_time,
+                txn_hash: txn_hash
+            };
+            self.emit(stindem_recovery_update_event);
         }
     
         fn get_stindem_recovery_txn_detail(
@@ -847,6 +998,19 @@ use starknet::{ ContractAddress, ClassHash };
 
             self.next_transaction_id.write(incremented_txn_id);
 
+              // Emit VotingCommitmentPurchased event
+            let voting_commitment_event: VotingCommitmentPurchased = VotingCommitmentPurchased {
+                transaction_id: current_txn_id,
+                voter_address: caller, // The actual voter/caller
+                treasury_address: stindem_treasury,
+                stindem_token_address: self.stindem_token_address.read(),
+                stindem_quantity: quantity,
+                unit_price: unit_price_of_stindem_in_strk,
+                commitment_date: current_time,
+                txn_hash: txn_hash
+            };
+            self.emit(voting_commitment_event);
+
             (current_txn_id, txn_hash)
 
         }
@@ -878,6 +1042,17 @@ use starknet::{ ContractAddress, ClassHash };
             };
 
             self.vote_right_payments.write(transaction_id, updated_txn);
+
+             // Emit VotingCommitmentUpdated event
+            let voting_commitment_update_event: VotingCommitmentUpdated = VotingCommitmentUpdated {
+                transaction_id: transaction_id,
+                voter_address: updateable_txn.seller_address, // seller_address is the voter in this context
+                stindem_quantity: updateable_txn.quantity,
+                payment_status: convert_payment_code_to_status(payment_status_code),
+                updated_at: current_time,
+                txn_hash: txn_hash
+            };
+            self.emit(voting_commitment_update_event);
 
         }
     
@@ -1195,58 +1370,66 @@ use starknet::{ ContractAddress, ClassHash };
         // ) -> ReinsurerResponse {
 
         // }
-    
-        // fn set_proposal_form_address(
-        //     ref self: ContractState,
-        //     proposal_form_address: ContractAddress
-        // ) {
 
-        // }
-    
-        // fn get_proposal_form_address(
-        //     self: @ContractState,
-        // ) -> ContractAddress {
-
-        // }
-    
-        // fn set_policy_minting_address(
-        //     ref self: ContractState,
-        //     policy_minting_address: ContractAddress
-        // ) {
-
-        // }
-    
-        // fn get_policy_minting_address(
-        //     self: @ContractState,
-        // ) -> ContractAddress {
-
-        // }
-    
-        // fn set_governance_address(
-        //     ref self: ContractState,
-        //     governance_address: ContractAddress
-        // ) {
-
-        // }
-    
-        // fn get_governance_address(
-        //     self: @ContractState,
-        // ) -> ContractAddress {
-
-        // }
-    
-        // fn set_claims_contract_address(
-        //     ref self: ContractState,
-        //     claims_contract_address: ContractAddress
-        // ) {
-
-        // }
-    
-        // fn get_claims_contract_address(
-        //     self: @ContractState,
-        // ) -> ContractAddress {
-
-        // }
+        fn set_proposal_form_address(
+            ref self: ContractState,
+            proposal_form_address: ContractAddress
+        ) {
+            let caller: ContractAddress = get_caller_address();
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+            self.proposal_form_address.write(proposal_form_address);
+        }
+        
+        fn get_proposal_form_address(
+            self: @ContractState,
+        ) -> ContractAddress {
+            self.proposal_form_address.read()
+        }
+        
+        fn set_policy_minting_address(
+            ref self: ContractState,
+            policy_minting_address: ContractAddress
+        ) {
+            let caller: ContractAddress = get_caller_address();
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+            self.policy_minting_address.write(policy_minting_address);
+        }
+        
+        fn get_policy_minting_address(
+            self: @ContractState,
+        ) -> ContractAddress {
+            self.policy_minting_address.read()
+        }
+        
+        fn set_governance_address(
+            ref self: ContractState,
+            governance_address: ContractAddress
+        ) {
+            let caller: ContractAddress = get_caller_address();
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+            self.governance_contract_address.write(governance_address);
+        }
+        
+        fn get_governance_address(
+            self: @ContractState,
+        ) -> ContractAddress {
+            self.governance_contract_address.read()
+        }
+        
+        fn set_claims_contract_address(
+            ref self: ContractState,
+            claims_contract_address: ContractAddress
+        ) {
+            let caller: ContractAddress = get_caller_address();
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
+            self.claims_contract_address.write(claims_contract_address);
+        }
+        
+        fn get_claims_contract_address(
+            self: @ContractState,
+        ) -> ContractAddress {
+            self.claims_contract_address.read()
+        }
     
     }
 
