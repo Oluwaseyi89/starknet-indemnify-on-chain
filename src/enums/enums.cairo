@@ -145,26 +145,3 @@ pub enum ReinsuranceContractType {
     Facultative,
     InvalidContractType
 }
-
-pub fn convert_reinsurance_contract_type_to_code(contract_type: ReinsuranceContractType) -> u8 {
-    
-    let code: u8 = match contract_type {
-        ReinsuranceContractType::Treaty => 0,
-        ReinsuranceContractType::Facultative => 1,
-        ReinsuranceContractType::InvalidContractType => 100,
-    };
-
-    code
-}
-
-pub fn convert_reinsurance_contract_code_to_type(code: u8) -> ReinsuranceContractType {
-
-    let contract_type: ReinsuranceContractType = match code {
-        0 => ReinsuranceContractType::Treaty,
-        1 => ReinsuranceContractType::Facultative,
-        _ => ReinsuranceContractType::InvalidContractType
-    };
-
-    contract_type
-}
-
