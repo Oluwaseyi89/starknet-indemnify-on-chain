@@ -290,8 +290,13 @@ pub mod PolicyNFT {
         }
 
         fn set_base_uri(ref self: ContractState, new_base_uri: ByteArray) {
+
+            let caller: ContractAddress = get_caller_address();
+
+            assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
             self.base_uri.write(new_base_uri);
         }
+        
         fn update_policy_data(
             ref self: ContractState, 
             token_id: u256, 
@@ -423,6 +428,12 @@ pub mod PolicyNFT {
 
             assert!(self.accesscontrol.has_role(ADMIN_ROLE, caller), "AccessControl: Caller is not the Admin");
             self.claims_contract_address.write(claims_contract_address);
+        }
+
+        fn get_base_uri(
+            self: @ContractState
+        ) -> ByteArray {
+            self.base_uri.read()
         }
     }
 

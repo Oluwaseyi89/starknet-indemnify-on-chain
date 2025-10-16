@@ -144,7 +144,11 @@ pub trait IPolicyNFT<TContractState> {
     fn set_claims_contract_address(
         ref self: TContractState,
         claims_contract_address: ContractAddress
-    );
+    );    
+    
+    fn get_base_uri(
+        self: @TContractState
+    ) -> ByteArray;
 }
 
 
